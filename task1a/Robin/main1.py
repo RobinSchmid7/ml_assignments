@@ -1,7 +1,7 @@
 """
 Task 1a
 Team Naiveoutliers
-Robin Schmid, Pascal Müller, Marvin Harms
+Robin Schmid
 Mar, 2021
 """
 
@@ -53,4 +53,4 @@ for l in lambdas:
     RMSE[i] = RMSE_sum/n_folds # Average RMSE over all folds
     i = i + 1
 
-np.savetxt("submission.csv",RMSE,comments='',delimiter=",",fmt="%s")
+np.savetxt("submission1.csv",RMSE,comments='',delimiter=",",fmt="%s")
