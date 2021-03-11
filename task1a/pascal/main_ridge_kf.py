@@ -5,7 +5,7 @@ Submission NLT191200BMAR21
 Team Naiveoutliers
 March 2021
 
-This approach uses sklearn Ridge regression and Kfold to perform a
+This approach uses sklearn Ridge regression and KFold to perform a
 10-fold cross-validation of a given data set.  The model is evaluated
 using the RMSE metric averaged over the 10 test folds.  The regression
 is performed on the original features, no feature transformation and

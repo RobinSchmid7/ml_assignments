@@ -5,11 +5,11 @@ Submission NLT191200BMAR21
 Team Naiveoutliers
 March 2021
 
-This approach uses sklearn Ridge regression and RepeatedKfold to
+This approach uses sklearn Ridge regression and RepeatedKFold to
 perform a 10-fold cross-validation of a given data set.  The model
 is evaluated using the RMSE metric averaged over the 10 test folds.
 The regression is performed on the original features, no feature
-transformation and scaling are used.  The reported RMSE for each lambda
+transformation and scaling are used.  The reported RMSE for all lambdas
 are stored in a .csv file.
 """
 import numpy as np
@@ -28,6 +28,7 @@ X = train_data.values[:, 1:]
 
 # number of folds
 n_folds = 10
+n_rep = 200
 
 # regularization parameters
 param_lambda = [0.1, 1.0, 10.0, 100.0, 200.0]
@@ -41,7 +42,7 @@ for param in param_lambda:
     rmse[ii] = 0.0
 
     # perform cross validation
-    rkf = RepeatedKFold(n_splits=n_folds, n_repeats=5, random_state=None)
+    rkf = RepeatedKFold(n_splits=n_folds, n_repeats=n_rep, random_state=None)
     for train_index, test_index in rkf.split(X):
         # gather training data
         y_train = y[train_index]
@@ -62,7 +63,7 @@ for param in param_lambda:
         rmse[ii] += mean_squared_error(y_true, y_pred)**0.5
 
     # average RMSE
-    rmse[ii] /= (n_folds * 5)
+    rmse[ii] /= (n_folds * n_rep)
     print(rmse[ii])
 
     # increment
