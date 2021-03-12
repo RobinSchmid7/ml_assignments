@@ -1,8 +1,12 @@
 """
 Task 1a
 Team Naiveoutliers
-Robin Schmid
+Robin Schmid, Pascal Müller, Marvin Harms
 Mar, 2021
+
+This model performs a Ridge regression for different lambda parameters
+and computes the RMSE for each lambda using cross validation with 10 folds.
+In order to give reproducible results the random seed for k fold is fixed
 """
 
 import pandas as pd
@@ -21,7 +25,7 @@ train_file = pd.read_csv("../handout/train.csv")
 y_data = train_file.values[:,0]
 x_data = train_file.values[:,1:]
 
-kf = KFold(n_splits=n_folds)
+kf = KFold(n_splits=n_folds, random_state=123, shuffle=True)
 i = 0
 RMSE = np.zeros(len(lambdas))
 for l in lambdas:

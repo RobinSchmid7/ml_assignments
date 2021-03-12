@@ -1,8 +1,11 @@
 """
 Task 1a
 Team Naiveoutliers
-Robin Schmid
+Robin Schmid, Pascal Müller, Marvin Harms
 Mar, 2021
+
+This model performs a Ridge regression for different lambda parameters
+and computes the RMSE for each lambda using cross validation with 10 folds.
 """
 
 import pandas as pd
@@ -31,10 +34,9 @@ for l in lambdas:
     # Cross validation for each fold
     for k in range(0,n_folds):
 
-        # Use option 1 for picking training data, similar approach as in slides
+        # Use option 1 for picking training data, similar approach as in lecture
         idx_test = idx_data[dpfold*k:dpfold*(k+1)] # Option 1, use 15 elements next to each other for one fold
         # idx_test = [idx+k for idx in idx_data if idx%n_folds == 0] # Option 2, use equally spaced data for one fold, here use every 10th element
-
         idx_train = [idx for idx in idx_data if idx not in idx_test]
 
         x_train = x_data[idx_train,:]
