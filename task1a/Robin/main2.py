@@ -18,8 +18,8 @@ lambdas = [0.1, 1, 10, 100, 200]
 # Load data
 train_file = pd.read_csv("../handout/train.csv")
 
-y_data = train_file.values[:,1]
-x_data = train_file.values[:,2:]
+y_data = train_file.values[:,0]
+x_data = train_file.values[:,1:]
 
 kf = KFold(n_splits=n_folds)
 i = 0

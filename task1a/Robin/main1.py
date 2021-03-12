@@ -17,8 +17,8 @@ lambdas = [0.1, 1, 10, 100, 200]
 # Load data
 train_file = pd.read_csv("../handout/train.csv")
 
-y_data = train_file.values[:,1]
-x_data = train_file.values[:,2:]
+y_data = train_file.values[:,0] # Attention indexing!!
+x_data = train_file.values[:,1:]
 
 dpfold = int(len(y_data)/n_folds) # Number of data per fold
 idx_data = np.arange(len(y_data))
