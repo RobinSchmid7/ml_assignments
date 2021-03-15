@@ -42,7 +42,7 @@ for param in param_lambda:
     rmse[ii] = 0.0
 
     # perform cross validation
-    rkf = RepeatedKFold(n_splits=n_folds, n_repeats=n_rep, random_state=None)
+    rkf = RepeatedKFold(n_splits=n_folds, n_repeats=n_rep, random_state=42)
     for train_index, test_index in rkf.split(X):
         # gather training data
         y_train = y[train_index]
@@ -53,7 +53,7 @@ for param in param_lambda:
         x_test = X[test_index]
 
         # create ridge regression model
-        model = Ridge(alpha=param, solver='cholesky')
+        model = Ridge(alpha=param)
         model.fit(x_train, y_train)
 
         # predict labels for test data

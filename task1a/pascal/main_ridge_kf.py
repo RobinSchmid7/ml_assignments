@@ -29,6 +29,9 @@ X = train_data.values[:, 1:]
 # number of folds
 n_folds = 10
 
+# random state
+rnd_state = 1
+
 # regularization parameters lambda
 param_lambda = [0.1, 1.0, 10.0, 100.0, 200.0]
 
@@ -41,7 +44,7 @@ for param in param_lambda:
     rmse[ii] = 0.0
 
     # perform cross validation
-    kf = KFold(n_splits=n_folds, shuffle=False, random_state=None)
+    kf = KFold(n_splits=n_folds, shuffle=True, random_state=rnd_state)
     for train_index, test_index in kf.split(X):
         # gather training data
         y_train = y[train_index]
@@ -52,7 +55,7 @@ for param in param_lambda:
         x_test = X[test_index]
 
         # create ridge regression model
-        model = Ridge(alpha=param, solver='cholesky')
+        model = Ridge(alpha=param)
         model.fit(x_train, y_train)
 
         # predict labels for test data
@@ -69,4 +72,4 @@ for param in param_lambda:
     ii += 1
 
 # save computed RMSE to file
-np.savetxt('submission_ridge_kf.csv', rmse, fmt='%s')
+np.savetxt('ridge_kf_rs'+str(rnd_state)+'.csv', rmse, fmt='%s')
