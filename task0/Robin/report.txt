@@ -1,4 +1,4 @@
-Dummy Task 0, Team: Naiveoutliers, 15.03.2021
+Dummy Task 0, Team: Naiveoutliers, Robin Schmid, 15.03.2021
 
 The goal of this task is to perform a regression over given data and predict the output y for some given data x.
 As an evaluation metric the root mean squared error (RMSE) has to be reported over all the data.
