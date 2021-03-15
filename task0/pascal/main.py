@@ -42,4 +42,4 @@ print(RMSE)
 
 # Write to output file
 output = np.asarray([id_test, y_pred]).transpose()
-np.savetxt("prediction.csv", output, header="Id,y", delimiter=",", fmt="%i,%s")
+np.savetxt("submission.csv", output, header="Id,y", delimiter=",", fmt="%i,%s")
