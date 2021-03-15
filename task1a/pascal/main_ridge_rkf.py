@@ -28,7 +28,10 @@ X = train_data.values[:, 1:]
 
 # number of folds
 n_folds = 10
-n_rep = 200
+n_rep = 10000
+
+# random state
+rnd_state = 42
 
 # regularization parameters
 param_lambda = [0.1, 1.0, 10.0, 100.0, 200.0]
@@ -42,7 +45,7 @@ for param in param_lambda:
     rmse[ii] = 0.0
 
     # perform cross validation
-    rkf = RepeatedKFold(n_splits=n_folds, n_repeats=n_rep, random_state=42)
+    rkf = RepeatedKFold(n_splits=n_folds, n_repeats=n_rep, random_state=rnd_state)
     for train_index, test_index in rkf.split(X):
         # gather training data
         y_train = y[train_index]
@@ -70,4 +73,4 @@ for param in param_lambda:
     ii += 1
 
 # save computed RMSE to file
-np.savetxt('submission_ridge_rkf.csv', rmse, fmt='%s')
+np.savetxt('ridge_rkf_rs'+str(rnd_state)+'_rep'+str(n_rep)+'.csv', rmse, fmt='%s')
