@@ -1,0 +1,6 @@
+Task 1a, Team: Naiveoutliers, Robin Schmid, 15.03.2021
+
+The goal of this task is to perform a 10-fold cross-validation with ridge regression with different regression parameters and report the root mean squared error (RMSE) averaged over the 10 test folds. Further just the original features should be used and no feature transformation or scaling should be applied.
+
+In this approach first the corresponding libraries of sklearn such as Ridge, KFold and mean_squared_error which allow performing Ridge regression, KFold cross validation and computation of the RMSE over the data.
+After reading in the data the cross validation model is initialized with 10 folds and a fixed random seed (123) - such that the results are reproductible - for selecting the data for the folds. Then for each regression parameter lambda a Ridge regression model is fit using the training data of the corresponding fold  and the predicted output is then evaluated with the RMSE metric using the corresponding test data of the fold and the predicted output. With this for regression parameter lambda and for each of the 10 folds a Ridge regression model is fitted and the RMSE is computed as the average over these 10 folds for each regression parameter lambda. The corresponding RMSE are then written to the submission file.
