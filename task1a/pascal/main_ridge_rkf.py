@@ -31,7 +31,7 @@ n_folds = 10
 n_rep = 10000
 
 # random state
-rnd_state = 42
+rnd_state = 190221
 
 # regularization parameters
 param_lambda = [0.1, 1.0, 10.0, 100.0, 200.0]
