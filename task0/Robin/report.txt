@@ -1,8 +1,0 @@
-Dummy Task 0, Team: Naiveoutliers, Robin Schmid, 15.03.2021
-
-The goal of this task is to perform a regression over given data and predict the output y for some given data x.
-As an evaluation metric the root mean squared error (RMSE) has to be reported over all the data.
-
-Approach:
-In this approach a simple linear regression model used for fitting the data. This model is trained using the training data and labels.
-It is then used to predict the output using the given test data. The RMSE is then calculated using the true data, which is given in this task as the mean of the data, and the predicted data. The resulting RMSE is then written to the submission file.
