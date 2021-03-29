@@ -12,7 +12,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
-
+from sklearn.model_selection import RepeatedKFold
 
 # load data
 data = pd.read_csv("../handout/train.csv")
@@ -28,16 +28,27 @@ X_feature = np.hstack((X_full,  # linear
                        np.cos(X_full),  # cosine
                        np.ones((X_full.shape[0], 1))))  # constant
 
-# perform evaluation with RMSE and KFold and print computed RMSE
-rmse = 0.0
+# perform evaluation with RMSE and KFold
+rmse_kf = 0.0
 n_folds = 10
 kf = KFold(n_splits=n_folds, shuffle=True, random_state=42)
 for train_idx, test_idx in kf.split(X=X_feature, y=y_full):
     model = LinearRegression(fit_intercept=False)
     model.fit(X=X_feature[train_idx], y=y_full[train_idx])
     y_pred = model.predict(X=X_feature[test_idx])
-    rmse += mean_squared_error(y_full[test_idx], y_pred) ** 0.5
-print(rmse/n_folds)
+    rmse_kf += mean_squared_error(y_full[test_idx], y_pred) ** 0.5
+print("RMSE 10-fold:", rmse_kf/n_folds)
+
+# perform evaluation with RMSE and repeated KFold
+rmse_rkf = 0.0
+n_repeats = 10
+rkf = RepeatedKFold(n_splits=n_folds, n_repeats=n_repeats, random_state=42)
+for train_idx, test_idx in rkf.split(X=X_feature, y=y_full):
+    model = LinearRegression(fit_intercept=False)
+    model.fit(X=X_feature[train_idx], y=y_full[train_idx])
+    y_pred = model.predict(X=X_feature[test_idx])
+    rmse_rkf += mean_squared_error(y_full[test_idx], y_pred) ** 0.5
+print("RMSE repeated 10-fold:", rmse_rkf / (n_folds * n_repeats))
 
 # perform linear regression on feature matrix
 model = LinearRegression(fit_intercept=False)  # accepts intercepts not only through origin
@@ -45,6 +56,3 @@ model.fit(X=X_feature, y=y_full)
 
 # save the weights to .csv file
 np.savetxt('weights.csv', model.coef_, fmt='%s')
-
-
-
