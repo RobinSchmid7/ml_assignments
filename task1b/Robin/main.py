@@ -38,7 +38,7 @@ lin_model.fit(x_transformed, y_data)
 elnet_model = ElasticNetCV(l1_ratio=elnet_lambdas,n_alphas=100,fit_intercept=False)
 elnet_model.fit(x_transformed,y_data)
 
-las_model = LassoCV(alphas=las_lambdas,cv=50) # Default: 5 folds
+las_model = LassoCV(alphas=las_lambdas,cv=2,fit_intercept=False) # Default: 5 folds
 las_model.fit(x_transformed, y_data)
 las_mean_error = np.mean(las_model.mse_path_,1)
 
