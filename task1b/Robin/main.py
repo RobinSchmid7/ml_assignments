@@ -3,8 +3,6 @@ Task 1b
 Team Naiveoutliers
 Robin Schmid, Pascal Mueller, Marvin Harms
 Mar, 2021
-
-Use cross validation to evaluation different models
 """
 
 import pandas as pd
@@ -46,7 +44,7 @@ rid_model = RidgeCV(alphas=rid_lambdas,fit_intercept=False,store_cv_values=True)
 rid_model.fit(x_transformed, y_data)
 rid_mean_error = np.mean(rid_model.cv_values_,0)
 
-# Save weights
+# Save weights, use Ridge CV for submission
 np.savetxt("linear.csv",lin_model.coef_,comments='',delimiter=",",fmt="%s")
 np.savetxt("elnet.csv",elnet_model.coef_,comments='',delimiter=",",fmt="%s")
 np.savetxt("lasso.csv",las_model.coef_,comments='',delimiter=",",fmt="%s")
