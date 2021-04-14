@@ -8,8 +8,9 @@ Apr, 2021
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import NuSVC
-from sklearn.svm import NuSVR
+from sklearn.pipeline import make_pipeline
+from sklearn.svm import SVC
+from sklearn.svm import SVR
 
 df_train_features = pd.read_csv("../handout/train_features.csv")
 df_train_labels = pd.read_csv("../handout/train_labels.csv")
@@ -50,42 +51,46 @@ regression_features = [r[6:] for r in regression_labels]
 # Idea for pre-processing:
 # For features for which the data is available for more than a certain percentage use each time series separately. Interplate to get the missing values.
 # In first step do not use other features, later try to use features with a lot of missing data and use the aveage over all time steps for these features.
-# Try to explore if using a mask helps - a binary signal which tell if the given feature has a nan value or not
+# Try to explore if using a mask helps - a binary signal which tells if the given feature has a nan value or not
+# Additionally discard rows which contain only nan
 
 ### Preprocessing training set
 
 # Only use features of data if the data for this feature is available more than a certain threshold
-num_data = len(df_train_features)
+num_features = len(df_train_features)
 
 # Percentage of data available of each feature
-percentage_available = np.sum(~df_train_features.isnull()) / num_data
+percentage_available = np.sum(~df_train_features.isnull()) / num_features
 
 # Reduced feature set
 df_train_features = df_train_features[percentage_available[percentage_available > available_threshold].index.tolist()]
+# Remaining features: Age, RRate, ABPm, SpO2, Heartrate, ABPs
 # Do not use Age as a feature where time matters //TODO: remove more elegantly
 df_train_features = df_train_features.drop(columns="Age")
-# Remaining features: Age, RRate, ABPm, SpO2, Heartrate, ABPs
+# Remaining features: RRate, ABPm, SpO2, Heartrate, ABPs
 
 # Shift data such that the time series goes from 0 to 11
 df_train_features.index = pd.MultiIndex.from_arrays([df_train_features.index.get_level_values(0),
                                                      df_train_features.groupby(level=0).cumcount()],
                                                     names=["pid","Time"])
+
 # Unstack features with few missing data to account for the time they were took
 df_train_features = df_train_features.unstack(level=-1)
 
 # Interpolate missing values
 #TODO: check missing values in pre processed data table - some are not interpolated? what is the problem for this??
+#TODO: try KNN?
 #TODO: speed this up (openmp for python?)
+#TODO: remove rows which contain only nan?
 
-# print("Start interpolating...")
-# for i in range(len(df_train_features.columns)):
-#     df_train_features[df_train_features.columns[i:i+12]] = df_train_features[df_train_features.columns[i:i+12]].interpolate(axis=1)
-# print("Interpolating finished")
-#
-# # Load saved interpolated data for quicker debugging
+# Limit direction both parameter interpolates also if the value of the first column is missing!
+print("Start interpolating...")
+for i in range(len(df_train_features.columns)):
+    df_train_features[df_train_features.columns[i:i+12]] = df_train_features[df_train_features.columns[i:i+12]].interpolate(axis=1,limit_direction='both',limit=12)
+print("Interpolating finished")
+
+# Load saved interpolated data for quicker debugging
 # TODO: remove this in the end
-
-# np.savetxt("filtered_train_features.csv",df_train_features,comments='',delimiter=",",fmt="%s")
 
 # For debugging load data since interpolating takes some time
 df_train_features = pd.read_csv("filtered_train_features.csv")
@@ -99,14 +104,16 @@ percentage_available = np.sum(~df_test_features.isnull()) / num_data
 
 # Reduced feature set
 df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
+# Remaining features: Age, RRate, ABPm, SpO2, Heartrate, ABPs
 # Do not use Age as a feature where time matters //TODO: remove more elegantly
 df_test_features = df_test_features.drop(columns="Age")
-# Remaining features: Age, RRate, ABPm, SpO2, Heartrate, ABPs
+# Remaining features: RRate, ABPm, SpO2, Heartrate, ABPs
 
 # Shift data such that the time series goes from 0 to 11
 df_test_features.index = pd.MultiIndex.from_arrays([df_test_features.index.get_level_values(0),
                                                      df_test_features.groupby(level=0).cumcount()],
                                                     names=["pid","Time"])
+
 # Unstack features with few missing data to account for the time they were took
 df_test_features = df_test_features.unstack(level=-1)
 
@@ -114,25 +121,24 @@ df_test_features = df_test_features.unstack(level=-1)
 #TODO: check missing values in pre processed data table - some are not interpolated? what is the problem for this??
 #TODO: speed this up (openmp for python?)
 
-# print("Start interpolating...")
-# for i in range(len(df_test_features.columns)):
-#     df_test_features[df_test_features.columns[i:i+12]] = df_test_features[df_test_features.columns[i:i+12]].interpolate(axis=1)
-# print("Interpolating finished")
+print("Start interpolating...")
+for i in range(len(df_test_features.columns)):
+    df_test_features[df_test_features.columns[i:i+12]] = df_test_features[df_test_features.columns[i:i+12]].interpolate(axis=1,limit_direction='both',limit=12)
+print("Interpolating finished")
 
 # Load saved interpolated data for quicker debugging
 # TODO: remove this in the end
-
-# np.savetxt("filtered_test_features.csv",df_test_features,comments='',delimiter=",",fmt="%s")
+np.savetxt("filtered_test_features.csv",df_test_features,comments='',delimiter=",",fmt="%s")
 
 # For debugging load data since interpolating takes some time
 df_test_features = pd.read_csv("filtered_train_features.csv")
 
 # Scale data, equalizes one sided distribution
-scaler = StandardScaler()
-scaler.transform(df_train_features)
+# scaler = StandardScaler()
+# scaler.transform(df_train_features)
 
 # Try using SVM for classification
-clf = NuSVC(kernel='linear')
+clf = make_pipeline(StandardScaler(), SVC(gamma='auto'))
 clf.fit(df_train_features,df_train_labels)
 
 clf.predict(df_test_features)
