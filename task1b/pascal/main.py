@@ -14,7 +14,7 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import RepeatedKFold
 
 # parameters for ridge regression
-ridge_alpha = np.linspace(0.001, 0.1, 1000)
+ridge_alpha = np.linspace(0.001, 0.1, 10000)
 
 # load data
 data = pd.read_csv("../handout/train.csv")
