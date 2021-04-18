@@ -83,7 +83,7 @@ Y_train = label_scaler.fit_transform(df_train_labels.values)
 
 # replace missing values by KNN-imputation
 imputer = KNNImputer(n_neighbors=3)
-df_train_features.values = imputer.fit_transform(X_train)
+X_train = imputer.fit_transform(X_train)
 
 # =========================
 # Preprocessing of test set
