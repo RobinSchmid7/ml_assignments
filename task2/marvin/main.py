@@ -21,8 +21,8 @@ def softmax(x):
 ############
 # USER INPUT
 ############
-use_preprocessed = True
-available_threshold = 0.5
+use_preprocessed = False
+available_threshold = 0.3
 kernel= 'linear'
 
 # get headers for Task 1
@@ -103,7 +103,7 @@ if not use_preprocessed:
     X_test = feature_scaler.transform(df_test_features.values)
 
     # replace missing values by KNN-imputation
-    X_test = imputer.fit_transform(X_test)
+    X_test = imputer.transform(X_test)
     df_test_features[df_test_features.columns] = X_test
 
     # Intermittent step: save the preprocessed data
@@ -147,9 +147,16 @@ df_test_labels[sepsis_label] = pred
 # ===========================
 # Task 3: predict vital signs
 # ===========================
+svm = SVR(kernel='rbf')
+# we let the svr fit and predict each vital sign individually:
+for label in regression_labels:
+    svm.fit(df_train_features.to_numpy(),df_train_labels[label].to_numpy())
+    # compute distance to hyperplane
+    pred = svm.predict(df_test_features.to_numpy())
+    df_test_labels[label] = pred
 
 # suppose df is a pandas dataframe containing the result
-df_test_labels.to_csv('prediction.csv', index=True, float_format='%.3f')
+df_test_labels.to_csv('prediction.zip', index=True, float_format='%.3f',compression='zip')
 # try to evaluate the performance:
 # we do 5-fold cross-validation:
 
