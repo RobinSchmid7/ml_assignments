@@ -21,7 +21,7 @@ def softmax(x):
 ############
 # USER INPUT
 ############
-use_preprocessed = False
+use_preprocessed = True
 available_threshold = 0.5
 kernel= 'linear'
 
@@ -41,7 +41,7 @@ classification_labels = [
 classification_features = [c[6:] for c in classification_labels]
 
 # get headers for Task 2
-sepsis_label = ["LABEL_Sepsis"]
+sepsis_label = "LABEL_Sepsis"
 sepsis_features = [s[6:] for s in sepsis_label]
 
 # get headers for Task 3
@@ -103,7 +103,7 @@ if not use_preprocessed:
     X_test = feature_scaler.transform(df_test_features.values)
 
     # replace missing values by KNN-imputation
-    X_test = imputer.transform(X_test)
+    X_test = imputer.fit_transform(X_test)
     df_test_features[df_test_features.columns] = X_test
 
     # Intermittent step: save the preprocessed data
@@ -115,6 +115,9 @@ else:
     df_train_features = pd.read_csv('df_train_features.csv')
     df_train_labels = pd.read_csv('df_train_labels.csv')
     df_test_features = pd.read_csv('df_test_features.csv')
+    df_train_features = df_train_features.set_index(["pid"]).sort_index()
+    df_train_labels = df_train_labels.set_index(["pid"]).sort_index()
+    df_test_features = df_test_features.set_index(["pid"])
 
 
 # ============================
@@ -122,15 +125,28 @@ else:
 # ============================
 df_test_labels = pd.DataFrame(index=df_test_features.index)
 df_test_labels.index.names = ['pid']
-svm = LinearSVC(max_iter=10000,dual=False)
+svm = LinearSVC(max_iter=10000,dual=False,class_weight='balanced')
 # we let the linear svm fit and predict each test individually:
 for label in classification_labels:
-    svm.fit(df_train_features.to_numpy(),np.round(df_train_labels[label].to_numpy()))
+    svm.fit(df_train_features.to_numpy(),df_train_labels[label].to_numpy())
     # compute distance to hyperplane
     distance = svm.decision_function(df_test_features.to_numpy())/np.linalg.norm(svm.coef_)
     # the predictor is the softmax of the negative distance:
     pred = softmax(-1*distance)
     df_test_labels[label] = pred
+
+
+# ======================
+# Task 2: predict sepsis
+# ======================
+svm = SVC(class_weight='balanced')
+svm.fit(df_train_features.to_numpy(),df_train_labels[sepsis_label].to_numpy())
+pred = svm.predict(df_test_features.to_numpy())
+df_test_labels[sepsis_label] = pred
+
+# ===========================
+# Task 3: predict vital signs
+# ===========================
 
 # suppose df is a pandas dataframe containing the result
 df_test_labels.to_csv('prediction.csv', index=True, float_format='%.3f')
@@ -140,7 +156,4 @@ df_test_labels.to_csv('prediction.csv', index=True, float_format='%.3f')
 # TODO: include 5-fold CV test
 
 
-# ======================
-# Task 2: predict sepsis
-# ======================
 
