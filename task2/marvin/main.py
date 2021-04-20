@@ -135,32 +135,40 @@ else:
 df_test_labels = pd.DataFrame(index=df_test_features.index)
 df_test_labels.index.names = ['pid']
 svm = SVC(probability=True,class_weight='balanced')
+print('TASK1: predicting probabilities...')
 # we let the linear svm fit and predict each test individually:
 for label in classification_labels:
     svm.fit(df_train_features.to_numpy(),df_train_labels[label].to_numpy())
-    # compute distance to hyperplane
-    prob = svm.decision_function(df_test_features.to_numpy())
-    df_test_labels[label] = prob
+    # compute probabilities
+    pred = svm.predict(df_test_features.to_numpy())
+    prob = svm.predict_proba(df_test_features.to_numpy())
+    df_test_labels[label] = [p[1] for p in prob]
+print('...done')
 
 
 # ======================
 # Task 2: predict sepsis
 # ======================
-svm = SVC(class_weight='balanced')
+svm = SVC(probability=True,class_weight='balanced')
+print('TASK2: predicting probabilities...')
 svm.fit(df_train_features.to_numpy(),df_train_labels[sepsis_label].to_numpy())
 pred = svm.predict(df_test_features.to_numpy())
-df_test_labels[sepsis_label] = pred
+prob = svm.predict_proba(df_test_features.to_numpy())
+df_test_labels[sepsis_label] = [p[1] for p in prob]
+print('...done')
 
 # ===========================
 # Task 3: predict vital signs
 # ===========================
 svm = SVR(kernel='rbf')
+print('TASK3: predicting regression values')
 # we let the svr fit and predict each vital sign individually:
 for label in regression_labels:
     svm.fit(df_train_features.to_numpy(),df_train_labels[label].to_numpy())
     # compute distance to hyperplane
     pred = svm.predict(df_test_features.to_numpy())
     df_test_labels[label] = pred
+print('...done')
 
 # suppose df is a pandas dataframe containing the result
 df_test_labels.to_csv('prediction.zip', index=True, float_format='%.3f',compression='zip')
