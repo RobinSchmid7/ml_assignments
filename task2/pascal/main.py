@@ -7,14 +7,17 @@ Apr, 2021
 
 import pandas as pd
 import numpy as np
+import scipy
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVR
-from sklearn.metrics import roc_auc_score
-from sklearn.metrics import r2_score
+from sklearn.metrics import roc_auc_score, r2_score
+from sklearn.model_selection import RandomizedSearchCV, train_test_split
+import joblib
+from imblearn.under_sampling import RandomUnderSampler
 
 
 def softmax(x):
@@ -99,15 +102,15 @@ if not use_preprocessed:
     df_train_features = df_train_features.groupby('pid', sort=False).mean()
 
     # eliminate features
-    num_features = len(df_train_features)
-    percentage_available = np.sum(~df_train_features.isnull()) / num_features
-    df_train_features = df_train_features[
-        percentage_available[percentage_available > available_threshold].index.tolist()]
+    # num_features = len(df_train_features)
+    # percentage_available = np.sum(~df_train_features.isnull()) / num_features
+    # df_train_features = df_train_features[
+    #     percentage_available[percentage_available > available_threshold].index.tolist()]
 
-    # # apply standard scaler
+    # apply standard scaler
     X_train = feature_scaler.fit_transform(df_train_features.values)
 
-    # # replace missing values by KNN-imputation
+    # replace missing values by KNN-imputation
     X_train = imputer.fit_transform(X_train)
     df_train_features[df_train_features.columns] = X_train
 
@@ -125,7 +128,7 @@ if not use_preprocessed:
     df_test_features = df_test_features.groupby('pid', sort=False).mean()
 
     # eliminate features, that are missing with more than 50% of the patients
-    df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
+    # df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
 
     # apply standard scaler
     X_test = feature_scaler.transform(df_test_features.values)
@@ -154,21 +157,70 @@ else:
 # perform predictions
 # ===================
 if predict:
+
     # ============================
     # Task 1: predict medical test
     # ============================
     df_test_labels = pd.DataFrame(index=df_test_features.index)
     df_test_labels.index.names = ['pid']
     svm = SVC(probability=True, class_weight='balanced')
+
+    # define parameter distributions
+    param_dist = {
+        'C': scipy.stats.expon(scale=1),
+        'gamma': ['auto'],
+        'kernel': ['rbf']}
+
+    # perform randomized search cv to find optimal parameters
+    svm_search = RandomizedSearchCV(
+        svm,
+        param_distributions=param_dist,
+        cv=5,
+        n_iter=4,
+        scoring="roc_auc",
+        error_score=0,
+        verbose=3,
+        n_jobs=-1)
+
+    # dealing with imbalanced dataset
+    sampler = RandomUnderSampler(random_state=42)
+
     print('TASK1: predicting medical tests...')
-    # we let the linear svm fit and predict each test individually
+
+    # we let the linear svm fit and predict each test individually:
     for label in classification_labels:
-        svm.fit(df_train_features.to_numpy(), df_train_labels[label].to_numpy())
-        # compute probabilities
-        pred = svm.predict(df_test_features.to_numpy())
-        prob = svm.predict_proba(df_test_features.to_numpy())
-        df_test_labels[label] = [p[1] for p in prob]
+        # perform a randomized search CV
+        y_train = df_train_labels[label].astype(int).values
+        X_train, X_test, y_train, y_test = train_test_split(
+            df_train_features,
+            y_train,
+            test_size=0.2,
+            random_state=42,
+            shuffle=True,
+        )
+
+        X_train, y_train = sampler.fit_resample(X_train, y_train)
+
+        svm_search.fit(X_train, y_train)
+
+        print(svm_search.best_estimator_.predict_proba(X_test)[:, 1])
+        print(
+            f"ROC score on test set "
+            f"{roc_auc_score(y_test, svm_search.best_estimator_.predict_proba(X_test)[:, 1])}"
+        )
+        print(f"CV score {svm_search.best_score_}")
+        print(f"Best parameters {svm_search.best_params_}")
+
+        joblib.dump(
+            svm_search.best_estimator_,
+            f"svm_search_job_{classification_labels}.pkl",
+        )
+
+        y_pred = svm_search.best_estimator_.predict_proba(df_test_features)[:, 1]
+        df_test_labels[label] = y_pred
+
         print('...predicted', label)
+
     print('...done')
 
     # ======================
@@ -176,10 +228,36 @@ if predict:
     # ======================
     svm = SVC(probability=True, class_weight='balanced')
     print('TASK2: predicting sepsis...')
-    svm.fit(df_train_features.to_numpy(), df_train_labels[sepsis_label].to_numpy())
-    pred = svm.predict(df_test_features.to_numpy())
-    prob = svm.predict_proba(df_test_features.to_numpy())
-    df_test_labels[sepsis_label] = [p[1] for p in prob]
+
+    # perform a randomized search CV
+    y_train = df_train_labels[sepsis_label].astype(int).values
+    X_train, X_test, y_train, y_test = train_test_split(
+        df_train_features,
+        y_train,
+        test_size=0.2,
+        random_state=42,
+        shuffle=True,
+    )
+
+    X_train, y_train = sampler.fit_resample(X_train, y_train)
+
+    svm_search.fit(X_train, y_train)
+
+    print(svm_search.best_estimator_.predict_proba(X_test)[:, 1])
+    print(
+        f"ROC score on test set "
+        f"{roc_auc_score(y_test, svm_search.best_estimator_.predict_proba(X_test)[:, 1])}"
+    )
+    print(f"CV score {svm_search.best_score_}")
+    print(f"Best parameters {svm_search.best_params_}")
+
+    joblib.dump(
+        svm_search.best_estimator_,
+        f"svm_search_job_{classification_labels}.pkl",
+    )
+
+    y_pred = svm_search.best_estimator_.predict_proba(df_test_features)[:, 1]
+    df_test_labels[sepsis_label] = y_pred
     print('...done')
 
     # ===========================
@@ -201,8 +279,3 @@ if predict:
     # ===============
     df_test_labels.to_csv('prediction.zip', index=True, float_format='%.3f', compression='zip')
     df_test_labels.to_csv('prediction.csv', index=True, float_format='%.3f')
-
-    # ====================
-    # evaluate performance
-    # ====================
-    # TODO: 5-fold cross-validation:
