@@ -8,6 +8,9 @@ Apr, 2021
 import pandas as pd
 import numpy as np
 import scipy
+import matplotlib.pyplot as plt
+import joblib
+import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer
 from sklearn.pipeline import make_pipeline
@@ -16,7 +19,6 @@ from sklearn.svm import LinearSVC
 from sklearn.svm import SVR
 from sklearn.metrics import roc_auc_score, r2_score
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
-import joblib
 from imblearn.under_sampling import RandomUnderSampler
 
 
@@ -28,9 +30,11 @@ def softmax(x):
 ############
 # USER INPUT
 ############
-use_preprocessed = True
-predict = True
-available_threshold = 0.3
+use_preprocessed = False
+predict = False
+available_threshold = 0.1
+variance_threshold = 1.0
+correlation_threshold = 0.6
 
 # get headers for Task 1
 classification_labels = [
@@ -71,21 +75,16 @@ if not use_preprocessed:
     df_test_features = pd.read_csv("../handout/test_features.csv")
 
     # sort feature dataframes by pid and time and set index to pid
-    df_train_features = df_train_features.sort_values(['pid', 'Time']).set_index(['pid']).sort_index()
-    df_test_features = df_test_features.sort_values(['pid', 'Time']).set_index(['pid']).sort_index()
+    df_train_features = df_train_features.set_index(['pid']).sort_values(['pid', 'Time'])
+    df_test_features = df_test_features.set_index(['pid']).sort_values(['pid'])
 
     # sort label dataframe by pid and set index to pid
-    df_train_labels = df_train_labels.set_index(['pid']).sort_index()
-
-    # Idea for pre-processing:
-    # First, for each patient, flatten the data rows into one row, by taking the average of all non-nan measurements.
-    # Then, we run a kNN classifier, copying the average of the k nearest neighbors to the missing value.
-    # Closeness is evaluated based on all other, non-nan features
+    df_train_labels = df_train_labels.set_index(['pid']).sort_values(['pid'])
 
     # use standard scaler
     feature_scaler = StandardScaler()
 
-    # use KNN-imputation
+    # use KNN-imputer
     imputer = KNNImputer(n_neighbors=3)
 
     # ==========================
@@ -94,18 +93,41 @@ if not use_preprocessed:
     # eliminate time dependency
     df_train_features.drop(labels='Time', axis=1, inplace=True)
 
-    # append the gradient of the following columns: RRate, Heartrate, ABPm, ABPd, SpO2, ABPs
-    for column in ['RRate', 'Heartrate', 'ABPm', 'ABPd', 'SpO2', 'ABPs']:
+    # missing feature elimination, eliminates features if percentage of available data is lower
+    # than defined threshold
+    num_features = len(df_train_features)
+    available_percentage = 1 - df_train_features.isnull().sum() / num_features
+    print('\nAvailable data in percent:\n', available_percentage * 100)
+    df_train_features = df_train_features[
+        available_percentage[available_percentage > available_threshold].index.tolist()]
+
+    # high correlation filter, drops features with correlation higher than 0.6
+    corr = df_train_features.corr()
+    print('\nFeature correlation:\n', corr)
+    top_corr_features = corr.index
+    plt.figure(figsize=(10, 10))
+    g = sns.heatmap(corr[top_corr_features].corr(), annot=False, cmap="RdYlGn")
+    plt.tight_layout()
+    plt.title('Correlation heatmap')
+    plt.savefig('plots/heatmap.png')
+    plt.show()
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+    to_drop = [col for col in upper.columns if any(upper[col] > correlation_threshold)]
+    print('\nFeatures with high correlation to be dropped:\n', to_drop)
+    df_train_features.drop(labels=to_drop, axis=1, inplace=True)
+
+    # low variance filter, drops features with variance lower than 1.0
+    variance = df_train_features.var()
+    print('\nFeature variance:\n', variance)
+    df_train_features = df_train_features[
+        variance[variance > variance_threshold].index.tolist()]
+
+    # append the gradient of the following columns: RRate, Heartrate, ABPm, SpO2
+    for column in ['RRate', 'ABPm', 'SpO2', 'Heartrate']:
         df_train_features[str('gradient_' + column)] = df_train_features[column].groupby('pid', sort=False).diff()
 
     # average the data for each patient
     df_train_features = df_train_features.groupby('pid', sort=False).mean()
-
-    # eliminate features
-    # num_features = len(df_train_features)
-    # percentage_available = np.sum(~df_train_features.isnull()) / num_features
-    # df_train_features = df_train_features[
-    #     percentage_available[percentage_available > available_threshold].index.tolist()]
 
     # apply standard scaler
     X_train = feature_scaler.fit_transform(df_train_features.values)
@@ -114,33 +136,33 @@ if not use_preprocessed:
     X_train = imputer.fit_transform(X_train)
     df_train_features[df_train_features.columns] = X_train
 
-    # =========================
-    # preprocessing of test set
-    # =========================
-    # eliminate time dependency
-    df_test_features.drop(labels='Time', axis=1, inplace=True)
-
-    # append the gradient of the following columns: RRate, Heartrate, ABPm, ABPd, SpO2, ABPs
-    for column in ['RRate', 'Heartrate', 'ABPm', 'ABPd', 'SpO2', 'ABPs']:
-        df_test_features[str('gradient_' + column)] = df_test_features[column].groupby('pid', sort=False).diff()
-
-    # average the data for each patient
-    df_test_features = df_test_features.groupby('pid', sort=False).mean()
-
-    # eliminate features, that are missing with more than 50% of the patients
-    # df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
-
-    # apply standard scaler
-    X_test = feature_scaler.transform(df_test_features.values)
-
-    # replace missing values by KNN-imputation
-    X_test = imputer.transform(X_test)
-    df_test_features[df_test_features.columns] = X_test
+    # # =========================
+    # # preprocessing of test set
+    # # =========================
+    # # eliminate time dependency
+    # df_test_features.drop(labels='Time', axis=1, inplace=True)
+    #
+    # # append the gradient of the following columns: RRate, Heartrate, ABPm, ABPd, SpO2, ABPs
+    # for column in ['RRate', 'Heartrate', 'ABPm', 'ABPd', 'SpO2', 'ABPs']:
+    #     df_test_features[str('gradient_' + column)] = df_test_features[column].groupby('pid', sort=False).diff()
+    #
+    # # average the data for each patient
+    # df_test_features = df_test_features.groupby('pid', sort=False).mean()
+    #
+    # # eliminate features, that are missing with more than 50% of the patients
+    # # df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
+    #
+    # # apply standard scaler
+    # X_test = feature_scaler.transform(df_test_features.values)
+    #
+    # # replace missing values by KNN-imputation
+    # X_test = imputer.transform(X_test)
+    # df_test_features[df_test_features.columns] = X_test
 
     # intermittent step: save the preprocessed data
     df_train_features.to_csv('df_train_features.csv')
     df_train_labels.to_csv('df_train_labels.csv')
-    df_test_features.to_csv('df_test_features.csv')
+    # df_test_features.to_csv('df_test_features.csv')
 
     print('...done')
 else:
@@ -157,12 +179,12 @@ else:
 # perform predictions
 # ===================
 if predict:
+    df_test_labels = pd.DataFrame(index=df_test_features.index)
+    df_test_labels.index.names = ['pid']
 
     # ============================
     # Task 1: predict medical test
     # ============================
-    df_test_labels = pd.DataFrame(index=df_test_features.index)
-    df_test_labels.index.names = ['pid']
     svm = SVC(probability=True, class_weight='balanced')
 
     # define parameter distributions
