@@ -16,22 +16,17 @@ from sklearn.pipeline import make_pipeline
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVR
+from sklearn.linear_model import ElasticNet
 from sklearn.metrics import roc_auc_score, r2_score
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
-from imblearn.under_sampling import RandomUnderSampler
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
-
-def softmax(x):
-    '''return the softmax of a vector x'''
-    return 1/(1+np.exp(x))
 
 ############
 # USER INPUT
 ############
 use_preprocessed = True
 available_threshold = 0.01
-kernel= 'linear'
 
 # get headers for Task 1
 classification_labels = [
@@ -50,13 +45,13 @@ classification_features = [c[6:] for c in classification_labels]
 
 # get headers for Task 2
 sepsis_label = "LABEL_Sepsis"
-sepsis_features = [s[6:] for s in sepsis_label]
 
 # get headers for Task 3
 regression_labels = [
 "LABEL_RRate", "LABEL_ABPm", "LABEL_SpO2", "LABEL_Heartrate"
 ]
-regression_features = [r[6:] for r in regression_labels]
+
+# create vector to save the scores
 ROC_scores = []
 
 if not use_preprocessed:
@@ -161,11 +156,6 @@ else:
     df_test_features = df_test_features.set_index(["pid"])
     print('...done')
 
-# =========================================
-# split dataset to enable score evaluation:
-# =========================================
-# Dealing with imbalanced dataset
-sampler = RandomUnderSampler(random_state=42)
 
 # ================================
 # create dataframe for test labels
@@ -209,8 +199,6 @@ for label in classification_labels:
         shuffle=True,
         )
 
-    #X_train, y_train = sampler.fit_resample(X_train, y_train)
-
     svm_search.fit(X_train, y_train)
 
     print(svm_search.best_estimator_.predict_proba(X_test)[:, 1])
@@ -246,7 +234,6 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42,
     shuffle=True,
     )
-#X_train, y_train = sampler.fit_resample(X_train, y_train)
 clf.fit(X_train, y_train)
 pred = clf.predict(X_test)
 prob = clf.predict_proba(X_test)
@@ -265,23 +252,23 @@ print('...done')
 # ===========================
 # Task 3: predict vital signs
 # ===========================
-svr = SVR()
+en = ElasticNet()
 print('TASK3: predicting regression values')
 
 # define parameter distributions
 param_dist = {
-    'C': scipy.stats.expon(scale=1),
-    'kernel': ['rbf']}
+    'alpha': scipy.stats.expon(scale=0.1),
+    }
 
 # Perform randomized search cv to find optimal parameters
-svr_search = RandomizedSearchCV(
-    svr,
+en_search = RandomizedSearchCV(
+    en,
     param_distributions=param_dist,
-    cv=2,
-    n_iter=10,
+    cv=4,
+    n_iter=20,
     scoring="r2",
     error_score=0,
-    verbose=3,
+    verbose=1,
     n_jobs=-1)
 
 # we let the svr fit and predict each vital sign individually:
@@ -297,20 +284,19 @@ for label in regression_labels:
     shuffle=True,
     )
 
-    #X_train, y_train = sampler.fit_resample(X_train, y_train)
-    svr_search.fit(X_train, y_train)
-    y_pred = svr_search.best_estimator_.predict(df_test_features)
+    en_search.fit(X_train, y_train)
+    y_pred = en_search.best_estimator_.predict(df_test_features)
     df_test_labels[label] = y_pred
     print(
         f"R2 score on test set "
-        f"{r2_score(y_test, svr_search.best_estimator_.predict(X_test))}"
+        f"{r2_score(y_test, en_search.best_estimator_.predict(X_test))}"
     )
-    print(f"CV score {svr_search.best_score_}")
-    print(f"Best parameters {svr_search.best_params_}")
+    print(f"CV score {en_search.best_score_}")
+    print(f"Best parameters {en_search.best_params_}")
 print('...done')
 
 # suppose df is a pandas dataframe containing the result
-df_test_labels.to_csv('prediction.zip', index=True, float_format='%.3f',compression='zip')
+df_test_labels.to_csv('prediction.csv', index=True, float_format='%.3f')
 # try to evaluate the performance:
 # we do 5-fold cross-validation:
 
