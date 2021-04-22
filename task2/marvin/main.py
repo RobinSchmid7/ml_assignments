@@ -12,21 +12,17 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.pipeline import make_pipeline
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
-from sklearn.svm import SVR
 from sklearn.linear_model import ElasticNet
 from sklearn.metrics import roc_auc_score, r2_score
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
-import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 
 ############
 # USER INPUT
 ############
-use_preprocessed = True
-available_threshold = 0.01
+use_preprocessed = False
 
 # get headers for Task 1
 classification_labels = [
@@ -91,11 +87,6 @@ if not use_preprocessed:
     # the average of the differences is the gradient
     df_train_features = df_train_features.groupby('pid',sort=False).mean()
 
-    # eliminate features, that are missing with more than 50% of the patients
-    num_features = len(df_train_features)
-    percentage_available = np.sum(~df_train_features.isnull()) / num_features
-    df_train_features = df_train_features[percentage_available[percentage_available > available_threshold].index.tolist()]
-
     # replace missing values by KNN-imputation
     X_train = MeanImputer.fit_transform(df_train_features.values)
 
@@ -123,9 +114,6 @@ if not use_preprocessed:
     
     # the average of the differences is the gradient
     df_test_features = df_test_features.groupby('pid',sort=False).mean()
-
-    # eliminate features, that are missing with more than 50% of the patients
-    df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
 
     # replace missing values by KNN-imputation
     X_test = MeanImputer.transform(df_test_features.values)
@@ -296,7 +284,7 @@ for label in regression_labels:
 print('...done')
 
 # suppose df is a pandas dataframe containing the result
-df_test_labels.to_csv('prediction.csv', index=True, float_format='%.3f')
+df_test_labels.to_csv('prediction.zip', index=True, float_format='%.3f', compression='zip')
 # try to evaluate the performance:
 # we do 5-fold cross-validation:
 
