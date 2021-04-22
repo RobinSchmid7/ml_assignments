@@ -29,7 +29,7 @@ def softmax(x):
 ############
 # USER INPUT
 ############
-use_preprocessed = False
+use_preprocessed = True
 available_threshold = 0.01
 kernel= 'linear'
 
@@ -271,11 +271,10 @@ print('TASK3: predicting regression values')
 # define parameter distributions
 param_dist = {
     'C': scipy.stats.expon(scale=1),
-    'gamma': scipy.stats.expon(scale=1),
     'kernel': ['rbf']}
 
 # Perform randomized search cv to find optimal parameters
-svm_search = RandomizedSearchCV(
+svr_search = RandomizedSearchCV(
     svr,
     param_distributions=param_dist,
     cv=2,
@@ -298,16 +297,16 @@ for label in regression_labels:
     shuffle=True,
     )
 
-    X_train, y_train = sampler.fit_resample(X_train, y_train)
-    svm_search.fit(X_train, y_train)
-    y_pred = svm_search.best_estimator_.predict(df_test_features)
+    #X_train, y_train = sampler.fit_resample(X_train, y_train)
+    svr_search.fit(X_train, y_train)
+    y_pred = svr_search.best_estimator_.predict(df_test_features)
     df_test_labels[label] = y_pred
     print(
         f"R2 score on test set "
-        f"{r2_score(y_test, svm_search.best_estimator_.predict(X_test))}"
+        f"{r2_score(y_test, svr_search.best_estimator_.predict(X_test))}"
     )
-    print(f"CV score {svm_search.best_score_}")
-    print(f"Best parameters {svm_search.best_params_}")
+    print(f"CV score {svr_search.best_score_}")
+    print(f"Best parameters {svr_search.best_params_}")
 print('...done')
 
 # suppose df is a pandas dataframe containing the result
