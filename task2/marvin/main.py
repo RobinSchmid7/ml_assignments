@@ -30,7 +30,7 @@ def softmax(x):
 # USER INPUT
 ############
 use_preprocessed = True
-available_threshold = 0.1
+available_threshold = 0.01
 kernel= 'linear'
 
 # get headers for Task 1
@@ -75,7 +75,7 @@ if not use_preprocessed:
 
     feature_scaler = StandardScaler()
     NNImputer = KNNImputer(n_neighbors=10)
-    MedianImputer = SimpleImputer(strategy='median')
+    MeanImputer = SimpleImputer(strategy='mean')
 
     # ==========================
     # Preprocessing training set
@@ -101,12 +101,13 @@ if not use_preprocessed:
     percentage_available = np.sum(~df_train_features.isnull()) / num_features
     df_train_features = df_train_features[percentage_available[percentage_available > available_threshold].index.tolist()]
 
-    # apply standard scaler
-    X_train = feature_scaler.fit_transform(df_train_features.values)
-
     # replace missing values by KNN-imputation
-    X_train = NNImputer.fit_transform(X_train)
+    X_train = MeanImputer.fit_transform(df_train_features.values)
+
+    # apply standard scaler
+    X_train = feature_scaler.fit_transform(X_train)
     df_train_features[df_train_features.columns] = X_train
+
     print('...done')
 
     # =========================
@@ -131,11 +132,11 @@ if not use_preprocessed:
     # eliminate features, that are missing with more than 50% of the patients
     df_test_features = df_test_features[percentage_available[percentage_available > available_threshold].index.tolist()]
 
-    # apply standard scaler
-    X_test = feature_scaler.transform(df_test_features.values)
-
     # replace missing values by KNN-imputation
-    X_test = NNImputer.transform(X_test)
+    X_test = MeanImputer.transform(df_test_features.values)
+
+    # apply standard scaler
+    X_test = feature_scaler.transform(X_test)
     df_test_features[df_test_features.columns] = X_test
 
     # important: reorder index
@@ -165,6 +166,10 @@ else:
 # =========================================
 # Dealing with imbalanced dataset
 sampler = RandomUnderSampler(random_state=42)
+
+# ================================
+# create dataframe for test labels
+# ================================
 df_test_labels = pd.DataFrame(index=df_test_features.index)
 df_test_labels.index.names = ['pid']
 
@@ -176,7 +181,7 @@ svm = SVC(probability=True,class_weight='balanced')
 # define parameter distributions
 param_dist = {
     'C': scipy.stats.expon(scale=1),
-    'gamma': scipy.stats.expon(scale=1),
+    'gamma': scipy.stats.expon(scale=0.1),
     'kernel': ['rbf']}
 
 # Perform randomized search cv to find optimal parameters
@@ -204,7 +209,7 @@ for label in classification_labels:
         shuffle=True,
         )
 
-    X_train, y_train = sampler.fit_resample(X_train, y_train)
+    #X_train, y_train = sampler.fit_resample(X_train, y_train)
 
     svm_search.fit(X_train, y_train)
 
@@ -241,7 +246,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42,
     shuffle=True,
     )
-X_train, y_train = sampler.fit_resample(X_train, y_train)
+#X_train, y_train = sampler.fit_resample(X_train, y_train)
 clf.fit(X_train, y_train)
 pred = clf.predict(X_test)
 prob = clf.predict_proba(X_test)
@@ -266,11 +271,10 @@ print('TASK3: predicting regression values')
 # define parameter distributions
 param_dist = {
     'C': scipy.stats.expon(scale=1),
-    'gamma': scipy.stats.expon(scale=1),
     'kernel': ['rbf']}
 
 # Perform randomized search cv to find optimal parameters
-svm_search = RandomizedSearchCV(
+svr_search = RandomizedSearchCV(
     svr,
     param_distributions=param_dist,
     cv=2,
@@ -293,10 +297,16 @@ for label in regression_labels:
     shuffle=True,
     )
 
-    X_train, y_train = sampler.fit_resample(X_train, y_train)
-    svm_search.fit(X_train, y_train)
-    y_pred = svm_search.best_estimator_.predict(df_test_features)
+    #X_train, y_train = sampler.fit_resample(X_train, y_train)
+    svr_search.fit(X_train, y_train)
+    y_pred = svr_search.best_estimator_.predict(df_test_features)
     df_test_labels[label] = y_pred
+    print(
+        f"R2 score on test set "
+        f"{r2_score(y_test, svr_search.best_estimator_.predict(X_test))}"
+    )
+    print(f"CV score {svr_search.best_score_}")
+    print(f"Best parameters {svr_search.best_params_}")
 print('...done')
 
 # suppose df is a pandas dataframe containing the result
