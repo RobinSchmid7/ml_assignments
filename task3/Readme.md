@@ -12,9 +12,19 @@ For Example: FCDI
 
 ## Idea
 
-Split mutation information into single characters,
-Ask sklearn about strings as features 
-- OneHotEncoder?
+Split mutation information into single characters, ask sklearn about strings as features 
+- OneHotEncoder, does not maintain ordering
+- Add specific int for specific amino acid (4 dimensions, maintain ordering)
+- one more?
+
+*Check if ordering is important or not!*
+
+## Key points
+
+Hyperparameters important for such tasks
+- Optimize for f1 score
+- Optimized batch size
+- etc.
 
 
 
