@@ -7,9 +7,13 @@ May, 2021
 
 """
 TODO:
--try with different layer sizes
+-f1 score for weighted random sampler seems wrong (bigger than 1)?
 -implement f1 score of sklearn, not own built in fct
 -f1 score seems very low now, not handling the imbalanced dataset well, maybe there are better ways than just using a scaler to the data?
+-try weighting in binary classification loss to deal with imbalanced classes - implemented, does not give better results, error?
+-try cross entropy loss instead of binary classification loss
+-power transformer instead of standard scaler for rescaling of the data?
+-later change model architecture, i.e. change layer sizes
 """
 
 import time
@@ -22,11 +26,13 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import f1_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import PowerTransformer
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.sampler import WeightedRandomSampler
 
 ### Preprocessing
 df_train = pd.read_csv("../handout/train.csv")
@@ -53,6 +59,7 @@ X_test_encoded = enc.transform(X_test).toarray()
 
 # Scale data
 scaler = StandardScaler()
+# scaler = PowerTransformer()
 X_train_scaled = scaler.fit_transform(X_train_encoded)
 X_test_scaled = scaler.transform(X_test_encoded)
 
@@ -94,8 +101,21 @@ class testData(Dataset):
 
 test_data = testData(torch.FloatTensor(X_test_scaled))
 
+# Try different sampling for imbalanced dataset
+
+
 # Initialize data loaders
+# Naive data loader
 train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+
+# TODO: check this implementation, does not give better results, f1 seems off
+# Weighted data loader
+# counts = np.bincount(y_train)
+# labels_weights = 1. / counts
+# weights = labels_weights[y_train]
+# train_sampler = WeightedRandomSampler(weights, len(weights))
+# train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE,sampler=train_sampler, shuffle=False)
+
 test_loader = DataLoader(dataset=test_data, batch_size=1)
 
 # Architecture
@@ -108,7 +128,7 @@ class binaryClassification(nn.Module):
 
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=0.1)
-        self.batchnorm1 = nn.BatchNorm1d(128)
+        self.batchnorm1 = nn.BatchNorm1d(64)
         self.batchnorm2 = nn.BatchNorm1d(64)
 
     def forward(self, inputs):
