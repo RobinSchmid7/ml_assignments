@@ -5,6 +5,13 @@ Robin Schmid, Pascal Mueller, Marvin Harms
 May, 2021
 """
 
+"""
+TODO:
+-try with different layer sizes
+-implement f1 score of sklearn, not own built in fct
+-f1 score seems very low now, not handling the imbalanced dataset well, maybe there are better ways than just using a scaler to the data?
+"""
+
 import time
 import seaborn as sns
 
@@ -18,11 +25,10 @@ from sklearn.preprocessing import StandardScaler
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
-## Preprocessing
+### Preprocessing
 df_train = pd.read_csv("../handout/train.csv")
 df_test = pd.read_csv("../handout/test.csv")
 
@@ -50,10 +56,11 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_encoded)
 X_test_scaled = scaler.transform(X_test_encoded)
 
+### Network architecture
 # Model parameters
 EPOCHS = 50
 BATCH_SIZE = 64
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.002
 
 # Data loaders
 # Train data
@@ -91,7 +98,7 @@ test_data = testData(torch.FloatTensor(X_test_scaled))
 train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(dataset=test_data, batch_size=1)
 
-# Define architecture
+# Architecture
 class binaryClassification(nn.Module):
     def __init__(self):
         super(binaryClassification, self).__init__()
@@ -101,7 +108,7 @@ class binaryClassification(nn.Module):
 
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=0.1)
-        self.batchnorm1 = nn.BatchNorm1d(64)
+        self.batchnorm1 = nn.BatchNorm1d(128)
         self.batchnorm2 = nn.BatchNorm1d(64)
 
     def forward(self, inputs):
@@ -133,18 +140,11 @@ def binary_acc(y_pred, y_test):
 
     return acc
 
-def f1_loss(y_true: torch.Tensor, y_pred: torch.Tensor, is_training=False) -> torch.Tensor:
-
-    assert y_true.ndim == 1
-    assert y_pred.ndim == 1 or y_pred.ndim == 2
-
-    if y_pred.ndim == 2:
-        y_pred = y_pred.argmax(dim=1)
-
-    tp = (y_true * y_pred).sum().to(torch.float32)
-    tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
-    fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
-    fn = (y_true * (1 - y_pred)).sum().to(torch.float32)
+def f1_acc(y_pred, y_true):
+    tp = (y_true * y_pred).sum().float()
+    tn = ((1 - y_true) * (1 - y_pred)).sum().float()
+    fp = ((1 - y_true) * y_pred).sum().float()
+    fn = (y_true * (1 - y_pred)).sum().float()
 
     epsilon = 1e-7
 
@@ -152,7 +152,6 @@ def f1_loss(y_true: torch.Tensor, y_pred: torch.Tensor, is_training=False) -> to
     recall = tp / (tp + fn + epsilon)
 
     f1 = 2 * (precision * recall) / (precision + recall + epsilon)
-    f1.requires_grad = is_training
     return f1
 
 # Train loop
@@ -167,8 +166,16 @@ for e in range(1, EPOCHS + 1):
         y_pred = model(X_batch)
 
         loss = criterion(y_pred, y_batch.unsqueeze(1))
-        acc = binary_acc(y_pred, y_batch.unsqueeze(1))
-        # acc = f1_loss(y_batch.unsqueeze(1),y_pred)
+
+        # Different accuracies
+        # acc = binary_acc(y_pred, y_batch.unsqueeze(1))
+        acc = f1_acc(y_batch.unsqueeze(1),y_pred)
+
+        # TODO: Using f1 score build in function of sklearn gives an error, y_batch is binary and needs to be a float too, not resolved yet
+        # vector = np.vectorize(np.float)
+        # y_batch = vector(y_batch.unsqueeze(1).detach().numpy())
+        # print(y_batch.unsqueeze(1).detach().numpy().astype(float))
+        # acc = f1_score(y_batch.unsqueeze(1).to(torch.float32).detach().numpy(),y_pred.detach().numpy())
 
         loss.backward()
         optimizer.step()
