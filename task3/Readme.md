@@ -13,7 +13,7 @@ For Example: FCDI
 ## Idea
 
 Split mutation information into single characters, ask sklearn about strings as features 
-- OneHotEncoder, does not maintain ordering
+- OneHotEncoder, does not maintain ordering - Update Robin: it maintains the ordering, check the size of the encoded data (try this)!
 - Add specific int for specific amino acid (4 dimensions, maintain ordering)
 - one more?
 
@@ -25,6 +25,8 @@ Hyperparameters important for such tasks
 - Optimize for f1 score
 - Optimized batch size
 - etc.
+
+-Start with simple NN e.g. 2 layers, Linear followed by ReLU
 
 
 
