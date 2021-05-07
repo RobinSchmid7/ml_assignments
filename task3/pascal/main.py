@@ -6,6 +6,20 @@ May, 2021
 """
 
 
+# TODO:
+# - f1 score for weighted random sampler seems wrong (bigger than 1)?
+# - implement f1 score of sklearn, not own built in fct
+# - f1 score seems very low now, not handling the imbalanced dataset well, maybe there are better ways than just using a
+# scaler to the data?
+# - try weighting in binary classification loss to deal with imbalanced classes - implemented, does not give better
+# results, error?
+# - try cross entropy loss instead of binary classification loss
+# - power transformer instead of standard scaler for rescaling of the data?
+# - later change model architecture, i.e. change layer sizes
+# - try splitting of data s.t. every split has 1 and 0 (uniform)
+# - try char to ASCII (reduce dimension to 4)
+
+
 import time
 import seaborn as sns
 
@@ -24,7 +38,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 
-# model parameters
+# hyperparameters
 EPOCHS = 10
 BATCH_SIZE = 64
 LEARNING_RATE = 0.001
@@ -55,6 +69,7 @@ class TestData(Dataset):
 
 
 # binary classification neural network
+# TODO: improve
 class BinaryClassification(nn.Module):
     def __init__(self):
         super(BinaryClassification, self).__init__()
@@ -91,7 +106,15 @@ def train(dataloader, model, criterion, optimizer):
             # compute loss and accuracy
             pred = model(X)
             loss = criterion(pred, y.unsqueeze(1))
-            acc = accuracy(y, pred)
+            acc = f1_acc(y, pred)
+            acc = binary_acc(y, pred)
+
+            # TODO: Using f1 score build in function of sklearn gives an error, y_batch is binary and needs to be a
+            #  float too, not resolved yet
+            # vector = np.vectorize(np.float)
+            # y_batch = vector(y_batch.unsqueeze(1).detach().numpy())
+            # print(y_batch.unsqueeze(1).detach().numpy().astype(float))
+            # acc = f1_score(y_batch.unsqueeze(1).to(torch.float32).detach().numpy(),y_pred.detach().numpy())
 
             # backpropagation
             optimizer.zero_grad()
@@ -121,7 +144,7 @@ def test(dataloader, model):
 
 
 # manual f1 score computation
-def accuracy(y_true, y_pred):
+def f1_acc(y_true, y_pred):
     tp = (y_true * y_pred).sum().to(torch.float32)
     tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
     fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
@@ -134,6 +157,17 @@ def accuracy(y_true, y_pred):
 
     f1 = 2 * (precision * recall) / (precision + recall + epsilon)
     return f1
+
+
+# binary accuracy computation
+def binary_acc(y_test, y_pred):
+    y_pred_tag = torch.round(torch.sigmoid(y_pred))
+
+    correct_results_sum = (y_pred_tag == y_test).sum().float()
+    acc = correct_results_sum / y_test.shape[0]
+    acc = torch.round(acc * 100)
+
+    return acc
 
 
 # -----------------------------------------------------------------------------
@@ -174,6 +208,14 @@ test_data = TestData(torch.FloatTensor(X_test_scaled))
 train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(dataset=test_data, batch_size=1)
 
+# TODO: check this implementation, does not give better results, f1 seems off
+# Weighted data loader
+# counts = np.bincount(y_train)
+# labels_weights = 1. / counts
+# weights = labels_weights[y_train]
+# train_sampler = WeightedRandomSampler(weights, len(weights))
+# train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, sampler=train_sampler, shuffle=False)
+
 # set device for training
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('Using {} device'.format(device))
@@ -182,10 +224,13 @@ print(model)
 
 # define loss function and optimizer
 criterion = nn.BCEWithLogitsLoss()
+# criterion = nn.BCELoss() # TODO: check if correct
+# criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
+# optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 # -----------------------------------------------------------------------------
-# train and test model
+# TODO: train and test model => try "train test split loop"
 train(train_loader, model, criterion, optimizer)
 predictions = test(test_loader, model)
 
