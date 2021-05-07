@@ -25,8 +25,7 @@ Hyperparameters important for such tasks
 - Optimize for f1 score
 - Optimized batch size
 - etc.
-
--Start with simple NN e.g. 2 layers, Linear followed by ReLU
+- Start with simple NN e.g. 2 layers, Linear followed by ReLU
 
 
 
