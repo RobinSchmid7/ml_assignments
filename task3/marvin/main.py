@@ -67,19 +67,118 @@ class binaryClassification(nn.Module):
     '''class to define NN architecture'''
     def __init__(self):
         super(binaryClassification, self).__init__()
-        self.classifier = nn.Sequential(
+        self.classifier1 = nn.Sequential(
             nn.Linear(len(X_test_enc[0]), 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
             nn.Linear(64,1)
         )
+        self.classifier2 = nn.Sequential(
+            nn.Linear(len(X_test_enc[0]), 64),
+            nn.ReLU(),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.BatchNorm1d(64),
+            nn.Dropout(p=0.1),
+            nn.Linear(64,1)
+        )
+
 
     def forward(self, inputs):
-        prediction = self.classifier(inputs)
+        prediction = self.classifier1(inputs)
         return prediction
 
-def train(train_loader, device, model, optimizer):
+def f1_acc(y_pred, y_true):
+
+    tp = (y_true * y_pred).sum().float()
+    tn = ((1 - y_true) * (1 - y_pred)).sum().float()
+    fp = ((1 - y_true) * y_pred).sum().float()
+    fn = (y_true * (1 - y_pred)).sum().float()
+    epsilon = 1e-7
+    precision = tp / (tp + fp + epsilon)
+    recall = tp / (tp + fn + epsilon)
+    f1 = 2 * (precision * recall) / (precision + recall + epsilon)
+    return f1
+
+def get_weight(labels):
+    global pos_weight
+    global neg_weight
+    weights = []
+    for label in labels:
+        if label:
+            weights.append(pos_weight)
+        else:
+            weights.append(neg_weight)
+    return torch.tensor(weights)
+#######################
+EPOCHS = 50
+BATCH_SIZE = 64
+LEARNING_RATE = 0.005
+#######################
+
+# ============
+# load dataset
+# ============
+df_train = pd.read_csv("../handout/train.csv")
+df_test = pd.read_csv("../handout/test.csv")
+# get training data
+X_train = df_train['Sequence'].values
+X_test = df_test['Sequence'].values
+# now, we split the strings into lists:
+X_train = [list(X_train[i]) for i in range(len(X_train))]
+X_test = [list(X_test[i]) for i in range(len(X_test))]
+
+y_train = df_train['Active'].values
+
+# ===================================================
+# perform feature encoding of the dataset
+# we choose a 4dim feature vector and ordinal encoder
+# ===================================================
+enc = OneHotEncoder(handle_unknown='error')
+enc.fit(X_train)
+X_train_enc = enc.transform(X_train).toarray()
+X_test_enc = enc.transform(X_test).toarray()
+print(enc.categories_)
+
+# =========
+# create NN
+# =========
+model = binaryClassification()
+device='cpu'
+model.to(device)
+# consider reweighting the classes due to heavily imbalanced dataset
+pos_frac = np.sum(y_train)/len(y_train)
+pos_weight = 1/pos_frac
+criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
+optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
+
+#=================
+# Standardize data
+# ================
+scaler = StandardScaler()
+scaler.fit(X_train_enc)
+X_train_enc = scaler.transform(X_train_enc)
+X_test_enc = scaler.transform(X_test_enc)
+
+
+# ===================
+# Define data loaders
+# ===================
+train_data = trainData(torch.FloatTensor(X_train_enc),
+                    torch.FloatTensor(y_train))
+test_data = testData(torch.FloatTensor(X_test_enc))
+train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+test_loader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
+
+
+# =================
+# run training loop
+# =================
+train_results = {}
+test_results = {}
+# iterate over all epochs
+for epoch in range(1, EPOCHS+1):
     time_ = AverageMeter()
     loss_ = AverageMeter()
     acc_ = AverageMeter()
@@ -105,192 +204,31 @@ def train(train_loader, device, model, optimizer):
         optimizer.step()
 
         # Accounting
-        acc = f1_acc(torch.round(prediction), labels.unsqueeze(1))
+        acc = f1_acc(torch.round(torch.sigmoid(prediction)), labels.unsqueeze(1))
         loss_.update(loss.mean().item(), bs)
         acc_.update(acc.item(), bs)
         time_.update(time.time() - end)
 
-    return loss_, acc_, time_
+    print(f'Epoch {epoch}. [Train] \t Time {time_.sum:.2f} Loss \
+            {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
+    train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
 
-def test(device, model):
-    time_ = AverageMeter()
-    loss_ = AverageMeter()
-    acc_ = AverageMeter()
-    model.eval()
-
-    for i, data, in enumerate(test_loader, 1):
-        # Accounting
-        end = time.time()
-        features, labels = data
-        features = features.to(device)
-        labels = labels.to(device)
-
-        bs = features.size(0)
-
-        with torch.no_grad():
-            prediction = model(features)
-            loss = criterion(prediction, labels.unsqueeze(1))
-            acc = f1_acc(torch.round(prediction), labels.unsqueeze(1))
-    
-            # Accounting
-            loss_.update(loss.mean().item(), bs)
-            acc_.update(acc.mean().item(), bs)
-            time_.update(time.time() - end)
-
-    return loss_, acc_, time_
-
-def experiment(num_epochs, train_loader, device, model, optimizer):
-    train_results = {}
-    test_results = {}
-    # Initial test error
-    loss, acc, time = test(device, model)
-    print(f'Upon initialization. [Test] \t Time {time.avg:.2f} \
-            Loss {loss.avg:.2f} \t Accuracy {acc.avg:.2f}')
-    test_results[0] = (loss, acc, time)
-    
-
-    for epoch in range(1, num_epochs+1):
-        loss, acc, time = train(train_loader, device, model, optimizer)
-        print(f'Epoch {epoch}. [Train] \t Time {time.sum:.2f} Loss \
-                {loss.avg:.2f} \t Accuracy {acc.avg:.2f}')
-        train_results[epoch] = (loss.avg, acc.avg, time.avg)
-
-        if not (epoch % 2):
-          loss, acc, time = test(device, model)
-          print(f'Epoch {epoch}. [Test] \t Time {time.sum:.2f} Loss \
-                {loss.avg:.2f} \t Accuracy {acc.avg:.2f}')
-          test_results[epoch] = (loss.avg, acc.avg, time.avg)
-
-    return train_results, test_results
-
-# Define accuracy function
-def binary_acc(y_pred, y_test):
-    y_pred_tag = torch.round(torch.sigmoid(y_pred))
-    correct_results_sum = (y_pred_tag == y_test).sum().float()
-    acc = correct_results_sum / y_test.shape[0]
-    acc = torch.round(acc * 100)
-    return acc
-
-# define F1 score function
-def f1_acc(y_pred, y_true):
-
-    tp = (y_true * y_pred).sum().float()
-    tn = ((1 - y_true) * (1 - y_pred)).sum().float()
-    fp = ((1 - y_true) * y_pred).sum().float()
-    fn = (y_true * (1 - y_pred)).sum().float()
-    epsilon = 1e-7
-    precision = tp / (tp + fp + epsilon)
-    recall = tp / (tp + fn + epsilon)
-    f1 = 2 * (precision * recall) / (precision + recall + epsilon)
-    return f1
-
-def get_weight(labels):
-    global pos_weight
-    global neg_weight
-    weights = []
-    for label in labels:
-        if label:
-            weights.append(pos_weight)
-        else:
-            weights.append(neg_weight)
-    return torch.tensor(weights)
-#######################
-EPOCHS = 10
-BATCH_SIZE = 64
-LEARNING_RATE = 0.0001
-#######################
-
-# ============
-# load dataset
-# ============
-df_train = pd.read_csv("../handout/train.csv")
-df_test = pd.read_csv("../handout/test.csv")
-# get training data
-X_train = df_train['Sequence'].values
-y_train = df_train['Active'].values
-#get test data
-X_test = df_test['Sequence'].values
-# now, we split the strings into lists:
-X_train = [list(X_train[i]) for i in range(len(X_train))]
-X_test = [list(X_test[i]) for i in range(len(X_test))]
-
-# ===================================================
-# perform feature encoding of the dataset
-# we choose a 4dim feature vector and ordinal encoder
-# ===================================================
-enc = OrdinalEncoder(handle_unknown='error')
-enc.fit(X_train)
-X_train_enc = enc.transform(X_train)
-X_test_enc = enc.transform(X_test)
-print(enc.categories_)
-
-# =========
-# create NN
-# =========
-model = binaryClassification()
-device='cpu'
-model.to(device)
-# consider reweighting the classes due to heavily imbalanced dataset
-pos_frac = np.sum(y_train)/len(y_train)
-pos_weight = 1/pos_frac
-neg_weight = 1 - pos_weight
-class_weights = torch.tensor([neg_weight,pos_weight])
-criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
-optimizer = optim.ASGD(model.parameters(), lr=LEARNING_RATE)
-
-#=================
-# Standardize data
-# ================
-scaler = StandardScaler()
-X_train_enc = scaler.fit_transform(X_train_enc)
-X_test_enc = scaler.transform(X_test_enc)
-
-# ===========================
-# run 4-fold cross-validation
-# ===========================
-kf = KFold(n_splits=5, shuffle=True, random_state=123)
-for (trainset,testset) in kf.split(X_train_enc,y=y_train):
-
-
-    # ===================
-    # Define data loaders
-    # ===================
-    train_data = trainData(torch.FloatTensor(X_train_enc[trainset]),
-                        torch.FloatTensor(y_train[trainset]))
-    test_data = trainData(torch.FloatTensor(X_train_enc[testset]),
-                        torch.FloatTensor(y_train[testset]))
-    train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=True)
-
-
-    # =================
-    # run training loop
-    # =================
-    train_res_0, test_res_0 = experiment(num_epochs=EPOCHS, 
-                                    train_loader=train_loader, 
-                                    device=device, 
-                                    model=model, 
-                                    optimizer=optimizer)
-
-# ==========================
-# after training, we predict
-# ==========================
-test_data = testData(torch.FloatTensor(X_test_enc))
-test_loader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
+# ===================
+# run prediction loop
+# ===================
 y_pred_list = []
 model.eval()
 for data in test_loader:
     with torch.no_grad():
-        features = data
-        features = features.to(device)
-        bs = features.size(0)
+        features = data.to(device)
         prediction = model(features)
-        prediction = nn.sigmoid(prediction)
+        prediction = torch.sigmoid(prediction)
         y_pred = torch.round(prediction)
-        y_pred_list.append(y_pred.cpu().numpy().T)               
+        y_pred_list.append(y_pred.cpu().numpy())               
 
 # =======================
 # save predictions to csv
 # =======================
-y_pred_list = [a.squeeze().tolist() for a in y_pred_list]                             
+y_pred_list = [batch.squeeze().tolist() for batch in y_pred_list]   
+y_pred_list = np.concatenate(y_pred_list).ravel().tolist()           
 np.savetxt("predictions.csv", y_pred_list, fmt="%i")
