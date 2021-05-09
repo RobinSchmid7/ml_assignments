@@ -35,8 +35,7 @@ class AverageMeter():
         self.count += n
         self.avg = self.sum / self.count
 
-# Data loaders
-# Train data
+# Train data loader
 class trainData(Dataset):
     '''data loader for training data'''
     def __init__(self, X_data, y_data):
@@ -49,8 +48,7 @@ class trainData(Dataset):
     def __len__(self):
         return len(self.X_data)
 
-
-# Test data
+# Test data loader
 class testData(Dataset):
     '''data loader for test data'''
     def __init__(self, X_data):
@@ -72,6 +70,7 @@ class binaryClassification(nn.Module):
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
+            nn.Dropout(p=0.1),
             nn.Linear(64,1)
         )
         self.classifier2 = nn.Sequential(
@@ -101,20 +100,10 @@ def f1_acc(y_pred, y_true):
     f1 = 2 * (precision * recall) / (precision + recall + epsilon)
     return f1
 
-def get_weight(labels):
-    global pos_weight
-    global neg_weight
-    weights = []
-    for label in labels:
-        if label:
-            weights.append(pos_weight)
-        else:
-            weights.append(neg_weight)
-    return torch.tensor(weights)
 #######################
-EPOCHS = 50
+EPOCHS = 80
 BATCH_SIZE = 64
-LEARNING_RATE = 0.005
+LEARNING_RATE = 0.003
 #######################
 
 # ============
@@ -149,7 +138,7 @@ device='cpu'
 model.to(device)
 # consider reweighting the classes due to heavily imbalanced dataset
 pos_frac = np.sum(y_train)/len(y_train)
-pos_weight = 1/pos_frac
+pos_weight = (1-pos_frac)/pos_frac
 criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
 
@@ -162,19 +151,10 @@ X_train_enc = scaler.transform(X_train_enc)
 X_test_enc = scaler.transform(X_test_enc)
 
 
-# ===================
-# Define data loaders
-# ===================
-train_data = trainData(torch.FloatTensor(X_train_enc),
-                    torch.FloatTensor(y_train))
-test_data = testData(torch.FloatTensor(X_test_enc))
-train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-test_loader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
-
-
 # =================
 # run training loop
 # =================
+model.train()
 train_results = {}
 test_results = {}
 # iterate over all epochs
@@ -182,7 +162,14 @@ for epoch in range(1, EPOCHS+1):
     time_ = AverageMeter()
     loss_ = AverageMeter()
     acc_ = AverageMeter()
-    model.train()
+    # ===================
+    # Define data loaders
+    # ===================
+    train_data = trainData(torch.FloatTensor(X_train_enc),
+                        torch.FloatTensor(y_train))
+    test_data = testData(torch.FloatTensor(X_test_enc))
+    train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
     # iterate over training minibatches
     for i, data, in enumerate(train_loader, 1):
         # Accounting

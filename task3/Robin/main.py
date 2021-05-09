@@ -189,7 +189,7 @@ for e in range(1, EPOCHS + 1):
 
         # Different accuracies
         # acc = binary_acc(y_pred, y_batch.unsqueeze(1))
-        acc = f1_acc(y_batch.unsqueeze(1),y_pred)
+        acc = f1_acc(y_batch.unsqueeze(1),torch.round(torch.sigmoid(y_pred)))
 
         # TODO: Using f1 score build in function of sklearn gives an error, y_batch is binary and needs to be a float too, not resolved yet
         # vector = np.vectorize(np.float)
