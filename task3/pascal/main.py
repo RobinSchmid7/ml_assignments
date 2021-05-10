@@ -39,12 +39,34 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 
 # hyperparameters
-EPOCHS = 10
+EPOCHS = 80
 BATCH_SIZE = 64
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.003
+
+# set random seed
+np.random.seed(42)
+torch.manual_seed(42)
 
 
-# data loaders
+class AverageMeter:
+    """ Computes and stores the average and current value. """
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+
+# training data loaders
 class TrainData(Dataset):
     def __init__(self, X_data, y_data):
         self.X_data = X_data
@@ -57,6 +79,7 @@ class TrainData(Dataset):
         return len(self.X_data)
 
 
+# test data loader
 class TestData(Dataset):
     def __init__(self, X_data):
         self.X_data = X_data
@@ -69,105 +92,42 @@ class TestData(Dataset):
 
 
 # binary classification neural network
-# TODO: improve
 class BinaryClassification(nn.Module):
     def __init__(self):
         super(BinaryClassification, self).__init__()
-        self.layer_1 = nn.Linear(len(X_test_scaled[0]), 64)
-        self.layer_2 = nn.Linear(64, 64)
-        self.layer_out = nn.Linear(64, 1)
-
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(p=0.1)
-        self.batchnorm1 = nn.BatchNorm1d(64)
-        self.batchnorm2 = nn.BatchNorm1d(64)
+        self.classifier1 = nn.Sequential(
+            nn.Linear(len(X_test_scaled[0]), 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU(),
+            nn.Dropout(p=0.1),
+            nn.Linear(64, 1)
+        )
+        self.classifier2 = nn.Sequential(
+            nn.Linear(len(X_test_scaled[0]), 64),
+            nn.ReLU(),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.BatchNorm1d(64),
+            nn.Dropout(p=0.1),
+            nn.Linear(64, 1)
+        )
 
     def forward(self, inputs):
-        x = self.relu(self.layer_1(inputs))
-        x = self.batchnorm1(x)
-        x = self.relu(self.layer_2(x))
-        x = self.batchnorm2(x)
-        x = self.dropout(x)
-        x = self.layer_out(x)
-
-        return x
-
-
-# train loop
-def train(dataloader, model, criterion, optimizer):
-    model.train()
-    for epoch in range(EPOCHS):
-        epoch_loss = 0
-        epoch_acc = 0
-
-        for batch, (X, y) in enumerate(dataloader):
-            X, y = X.to(device), y.to(device)
-
-            # compute loss and accuracy
-            pred = model(X)
-            loss = criterion(pred, y.unsqueeze(1))
-            acc = f1_acc(y, pred)
-            acc = binary_acc(y, pred)
-
-            # TODO: Using f1 score build in function of sklearn gives an error, y_batch is binary and needs to be a
-            #  float too, not resolved yet
-            # vector = np.vectorize(np.float)
-            # y_batch = vector(y_batch.unsqueeze(1).detach().numpy())
-            # print(y_batch.unsqueeze(1).detach().numpy().astype(float))
-            # acc = f1_score(y_batch.unsqueeze(1).to(torch.float32).detach().numpy(),y_pred.detach().numpy())
-
-            # backpropagation
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss += loss
-            epoch_acc += acc
-
-        print(f'Epoch {epoch + 0:03}: | '
-              f'Loss: {epoch_loss / len(train_loader):.5f} | '
-              f'Acc: {epoch_acc / len(train_loader):.3f}')
-
-
-# model evaluation
-def test(dataloader, model):
-    y_pred = list()
-    model.eval()
-    with torch.no_grad():
-        for X in dataloader:
-            X = X.to(device)
-            pred = model(X)
-            pred = torch.sigmoid(pred)
-            pred_tag = torch.round(pred)
-            y_pred.append(pred_tag.cpu().numpy())
-    return [a.squeeze().tolist() for a in y_pred]
+        return self.classifier1(inputs)
 
 
 # manual f1 score computation
-def f1_acc(y_true, y_pred):
-    tp = (y_true * y_pred).sum().to(torch.float32)
-    tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
-    fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
-    fn = (y_true * (1 - y_pred)).sum().to(torch.float32)
-
+def f1_acc(y_pred, y_true):
+    tp = (y_true * y_pred).sum().float()
+    tn = ((1 - y_true) * (1 - y_pred)).sum().float()
+    fp = ((1 - y_true) * y_pred).sum().float()
+    fn = (y_true * (1 - y_pred)).sum().float()
     epsilon = 1e-7
-
     precision = tp / (tp + fp + epsilon)
     recall = tp / (tp + fn + epsilon)
-
     f1 = 2 * (precision * recall) / (precision + recall + epsilon)
     return f1
-
-
-# binary accuracy computation
-def binary_acc(y_test, y_pred):
-    y_pred_tag = torch.round(torch.sigmoid(y_pred))
-
-    correct_results_sum = (y_pred_tag == y_test).sum().float()
-    acc = correct_results_sum / y_test.shape[0]
-    acc = torch.round(acc * 100)
-
-    return acc
 
 
 # -----------------------------------------------------------------------------
@@ -175,13 +135,17 @@ def binary_acc(y_test, y_pred):
 df_train = pd.read_csv("../handout/train.csv")
 df_test = pd.read_csv("../handout/test.csv")
 
+# data is very imbalanced
+# sns.countplot(x = 'Active', data=df_train)
+# plt.show()
+
 # split strings of amino acids, maintaining the sites
 X_train = df_train['Sequence'].values
 X_train = [list(X_train[i]) for i in range(len(X_train))]
 X_test = df_test['Sequence'].values
 X_test = [list(X_test[i]) for i in range(len(X_test))]
 
-# get label of mutation
+# get activity label of mutations
 y_train = df_train['Active'].values
 
 # encode data with one hot encoding, preserve the order of the mutation
@@ -189,10 +153,7 @@ enc = OneHotEncoder()
 enc.fit(X_train)
 X_train_encoded = enc.transform(X_train).toarray()
 X_test_encoded = enc.transform(X_test).toarray()
-
-# data is very imbalanced
-# sns.countplot(x = 'Active', data=df_train)
-# plt.show()
+print(enc.categories_)
 
 # scale data
 scaler = StandardScaler()
@@ -202,19 +163,6 @@ X_test_scaled = scaler.transform(X_test_encoded)
 
 # -----------------------------------------------------------------------------
 # network architecture
-train_data = TrainData(torch.FloatTensor(X_train_scaled), torch.FloatTensor(y_train))
-test_data = TestData(torch.FloatTensor(X_test_scaled))
-
-train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-test_loader = DataLoader(dataset=test_data, batch_size=1)
-
-# TODO: check this implementation, does not give better results, f1 seems off
-# Weighted data loader
-# counts = np.bincount(y_train)
-# labels_weights = 1. / counts
-# weights = labels_weights[y_train]
-# train_sampler = WeightedRandomSampler(weights, len(weights))
-# train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, sampler=train_sampler, shuffle=False)
 
 # set device for training
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -222,17 +170,99 @@ print('Using {} device'.format(device))
 model = BinaryClassification().to(device)
 print(model)
 
-# define loss function and optimizer
-criterion = nn.BCEWithLogitsLoss()
-# criterion = nn.BCELoss() # TODO: check if correct
-# criterion = nn.CrossEntropyLoss()
+# define optimizer
 optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
 # optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+# define loss function
+# consider re-weighting the classes due to heavily imbalanced dataset
+pos_frac = np.sum(y_train)/len(y_train)
+pos_weight = (1-pos_frac)/pos_frac
+criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
+# criterion = nn.BCEWithLogitsLoss()
+# criterion = nn.BCELoss() # TODO: check if correct
+# criterion = nn.CrossEntropyLoss()
+
+# data loaders
+train_data = TrainData(torch.FloatTensor(X_train_scaled), torch.FloatTensor(y_train))
+test_data = TestData(torch.FloatTensor(X_test_scaled))
+train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+test_loader = DataLoader(dataset=test_data, batch_size=1)
+
+# weighted random sampler for training data => gives worse scoring!
+# print('target train 0/1: {}/{}'.format(
+#     len(np.where(y_train == 0)[0]), len(np.where(y_train == 1)[0])))
+#
+# class_sample_count = np.bincount(y_train)
+#
+# weight = 1. / class_sample_count
+# samples_weight = np.array([weight[k] for k in y_train])
+# samples_weight = torch.from_numpy(samples_weight)
+# samples_weight = samples_weight.double()
+#
+# sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight, len(samples_weight))
+#
+# train_loader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=sampler)
+#
+# for i, (data, target) in enumerate(train_loader):
+#     print("batch index {}, 0/1: {}/{}".format(
+#         i,
+#         len(np.where(target.numpy() == 0)[0]),
+#         len(np.where(target.numpy() == 1)[0])))
+
 # -----------------------------------------------------------------------------
-# TODO: train and test model => try "train test split loop"
-train(train_loader, model, criterion, optimizer)
-predictions = test(test_loader, model)
+# training loop
+model.train()
+train_results = {}
+
+# iterate over all epochs
+for epoch in range(1, EPOCHS+1):
+    time_ = AverageMeter()
+    loss_ = AverageMeter()
+    acc_ = AverageMeter()
+
+    # iterate over training mini-batches
+    for i, data, in enumerate(train_loader, 1):
+        # accounting
+        end = time.time()
+        features, labels = data
+        features = features.to(device)
+        labels = labels.to(device)
+        bs = features.size(0)
+
+        # zero the parameter gradients
+        optimizer.zero_grad()
+        # forward propagation
+        prediction = model(features)
+        # compute the loss
+        loss = criterion(prediction, labels.unsqueeze(1))
+        # backward propagation
+        loss.backward()
+        # optimization step
+        optimizer.step()
+
+        # accounting
+        acc = f1_acc(torch.round(torch.sigmoid(prediction)), labels.unsqueeze(1))
+        loss_.update(loss.mean().item(), bs)
+        acc_.update(acc.item(), bs)
+        time_.update(time.time() - end)
+
+    print(f'Epoch {epoch}. [Train] \t Time {time_.sum:.2f} Loss \
+            {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
+
+    train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
+
+# -----------------------------------------------------------------------------
+# perform predictions
+model.eval()
+y_pred_list = list()
+for data in test_loader:
+    with torch.no_grad():
+        features = data.to(device)
+        prediction = model(features)
+        y_pred = torch.round(torch.sigmoid(prediction))
+        y_pred_list.append(y_pred.cpu().numpy())
 
 # save predictions to csv file
-np.savetxt("predictions.csv", predictions, fmt="%i")
+y_pred_list = [batch.squeeze().tolist() for batch in y_pred_list]
+np.savetxt("predictions.csv", y_pred_list, fmt="%i")
