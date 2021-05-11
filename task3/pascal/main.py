@@ -7,18 +7,19 @@ May, 2021
 
 
 # TODO:
-# - f1 score for weighted random sampler seems wrong (bigger than 1)?
 # - implement f1 score of sklearn, not own built in fct
-# - f1 score seems very low now, not handling the imbalanced dataset well, maybe there are better ways than just using a
-# scaler to the data?
-# - try weighting in binary classification loss to deal with imbalanced classes - implemented, does not give better
-# results, error?
 # - try cross entropy loss instead of binary classification loss
-# - power transformer instead of standard scaler for rescaling of the data?
 # - later change model architecture, i.e. change layer sizes
-# - try splitting of data s.t. every split has 1 and 0 (uniform)
 # - try char to ASCII (reduce dimension to 4)
 
+# DONE/TESTED:
+# - f1 score for weighted random sampler seems wrong (bigger than 1)? => tensor to numpy
+# - f1 score seems very low now, not handling the imbalanced dataset well, maybe there are better ways than just using a
+#   scaler to the data? => power transformer instead of standard scaler
+# - try weighting in binary classification loss to deal with imbalanced classes - implemented, does not give better
+#   results, error? => seems like that distribution is changed very extreme
+# - try splitting of data s.t. every split has 1 and 0 (uniform) => seems like that distribution is changed very extreme
+# - power transformer instead of standard scaler for rescaling of the data? => slightly better results
 
 import time
 import seaborn as sns
@@ -156,8 +157,8 @@ X_test_encoded = enc.transform(X_test).toarray()
 print(enc.categories_)
 
 # scale data
-scaler = StandardScaler()
-# scaler = PowerTransformer()
+# scaler = StandardScaler()
+scaler = PowerTransformer()
 X_train_scaled = scaler.fit_transform(X_train_encoded)
 X_test_scaled = scaler.transform(X_test_encoded)
 
@@ -247,8 +248,7 @@ for epoch in range(1, EPOCHS+1):
         acc_.update(acc.item(), bs)
         time_.update(time.time() - end)
 
-    print(f'Epoch {epoch}. [Train] \t Time {time_.sum:.2f} Loss \
-            {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
+    print(f'Epoch, {epoch}, [Train], Time, {time_.sum:.2f}, Loss, {loss_.avg:.2f}, Accuracy, {acc_.avg:.2f}')
 
     train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
 
