@@ -172,8 +172,8 @@ model = BinaryClassification().to(device)
 print(model)
 
 # define optimizer
-optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
-# optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+# optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 # define loss function
 # consider re-weighting the classes due to heavily imbalanced dataset
