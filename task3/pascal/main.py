@@ -21,7 +21,7 @@ May, 2021
 # - try splitting of data s.t. every split has 1 and 0 (uniform) => seems like that distribution is changed very extreme
 # - power transformer instead of standard scaler for rescaling of the data? => slightly better results
 
-import time
+import time as timing
 import seaborn as sns
 
 import numpy as np
@@ -29,7 +29,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import PowerTransformer
 
@@ -225,7 +225,7 @@ for epoch in range(1, EPOCHS+1):
     # iterate over training mini-batches
     for i, data, in enumerate(train_loader, 1):
         # accounting
-        end = time.time()
+        end = timing.time()
         features, labels = data
         features = features.to(device)
         labels = labels.to(device)
@@ -242,15 +242,35 @@ for epoch in range(1, EPOCHS+1):
         # optimization step
         optimizer.step()
 
+        # report
+        # print(classification_report(torch.round(torch.sigmoid(prediction)).detach().numpy(), labels.unsqueeze(1)))
+        # print(confusion_matrix(torch.round(torch.sigmoid(prediction)).detach().numpy(), labels.unsqueeze(1)))
+
         # accounting
         acc = f1_acc(torch.round(torch.sigmoid(prediction)), labels.unsqueeze(1))
         loss_.update(loss.mean().item(), bs)
         acc_.update(acc.item(), bs)
-        time_.update(time.time() - end)
+        time_.update(timing.time() - end)
 
-    print(f'Epoch, {epoch}, [Train], Time, {time_.sum:.2f}, Loss, {loss_.avg:.2f}, Accuracy, {acc_.avg:.2f}')
-
+    print(f'Epoch {epoch}. [Train] \t Time {time_.sum:.2f} Loss {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
     train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
+
+# plot training process
+training = list()
+for key, values in train_results.items():
+    training.append([key, values[0], values[1], values[2]])
+training = list(map(list, zip(*training)))
+
+fig, axs = plt.subplots(2)
+fig.suptitle('Loss and accuracy per epoch')
+axs[0].plot(training[0], training[1], 'b')
+axs[0].set_ylabel('loss')
+axs[0].grid()
+axs[1].plot(training[0], training[2], 'b')
+axs[1].set_ylabel('accuracy')
+axs[1].set_xlabel('epoch')
+axs[1].grid()
+plt.show()
 
 # -----------------------------------------------------------------------------
 # perform predictions
