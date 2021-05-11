@@ -43,6 +43,7 @@ from torch.utils.data.sampler import WeightedRandomSampler
 EPOCHS = 80
 BATCH_SIZE = 64
 LEARNING_RATE = 0.003
+DROPOUT = 0.1
 
 # set random seed
 np.random.seed(42)
@@ -101,7 +102,7 @@ class BinaryClassification(nn.Module):
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=DROPOUT),
             nn.Linear(64, 1)
         )
         self.classifier2 = nn.Sequential(
@@ -110,7 +111,7 @@ class BinaryClassification(nn.Module):
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.BatchNorm1d(64),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=DROPOUT),
             nn.Linear(64, 1)
         )
 
@@ -136,7 +137,7 @@ def f1_acc(y_pred, y_true):
 df_train = pd.read_csv("../handout/train.csv")
 df_test = pd.read_csv("../handout/test.csv")
 
-# data is very imbalanced
+# # data is very imbalanced
 # sns.countplot(x = 'Active', data=df_train)
 # plt.show()
 
@@ -180,17 +181,15 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 pos_frac = np.sum(y_train)/len(y_train)
 pos_weight = (1-pos_frac)/pos_frac
 criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
-# criterion = nn.BCEWithLogitsLoss()
-# criterion = nn.BCELoss() # TODO: check if correct
-# criterion = nn.CrossEntropyLoss()
 
-# data loaders
+# transform data into tensors for pytorch
 train_data = TrainData(torch.FloatTensor(X_train_scaled), torch.FloatTensor(y_train))
 test_data = TestData(torch.FloatTensor(X_test_scaled))
-train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+
+# naive data loader for test data
 test_loader = DataLoader(dataset=test_data, batch_size=1)
 
-# weighted random sampler for training data => gives worse scoring!
+# # weighted random sampler for training data
 # print('target train 0/1: {}/{}'.format(
 #     len(np.where(y_train == 0)[0]), len(np.where(y_train == 1)[0])))
 #
@@ -204,12 +203,16 @@ test_loader = DataLoader(dataset=test_data, batch_size=1)
 # sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight, len(samples_weight))
 #
 # train_loader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=sampler)
-#
-# for i, (data, target) in enumerate(train_loader):
-#     print("batch index {}, 0/1: {}/{}".format(
-#         i,
-#         len(np.where(target.numpy() == 0)[0]),
-#         len(np.where(target.numpy() == 1)[0])))
+
+# naive data loader to training data
+train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
+
+# print distribution of labels in mini-batches
+for i, (data, target) in enumerate(train_loader):
+    print("batch index {}, 0/1: {}/{}".format(
+        i,
+        len(np.where(target.numpy() == 0)[0]),
+        len(np.where(target.numpy() == 1)[0])))
 
 # -----------------------------------------------------------------------------
 # training loop
@@ -242,7 +245,7 @@ for epoch in range(1, EPOCHS+1):
         # optimization step
         optimizer.step()
 
-        # report
+        # reports per mini-batch
         # print(classification_report(torch.round(torch.sigmoid(prediction)).detach().numpy(), labels.unsqueeze(1)))
         # print(confusion_matrix(torch.round(torch.sigmoid(prediction)).detach().numpy(), labels.unsqueeze(1)))
 
