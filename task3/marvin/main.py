@@ -7,6 +7,7 @@ May, 2021
 import time
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,8 +16,17 @@ from torch.utils.data import Dataset, DataLoader
 import sklearn
 from sklearn.metrics import f1_score
 from sklearn.model_selection import KFold, train_test_split
-from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder,StandardScaler
+from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder,StandardScaler, PowerTransformer
 
+#######################
+EPOCHS = 60
+BATCH_SIZE = 64
+LEARNING_RATE = 0.003
+#######################
+
+# set random seed
+np.random.seed(42)
+torch.manual_seed(42)
 
 class AverageMeter():
     """Computes and stores the average and current value"""
@@ -74,18 +84,19 @@ class binaryClassification(nn.Module):
             nn.Linear(64,1)
         )
         self.classifier2 = nn.Sequential(
-            nn.Linear(len(X_test_enc[0]), 64),
-            nn.ReLU(),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.BatchNorm1d(64),
+            nn.Linear(len(X_test_enc[0]), 128),
             nn.Dropout(p=0.1),
-            nn.Linear(64,1)
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64,32),
+            nn.ReLU(),
+            nn.Linear(32,1),
         )
 
 
     def forward(self, inputs):
-        prediction = self.classifier1(inputs)
+        prediction = self.classifier2(inputs)
         return prediction
 
 def f1_acc(y_pred, y_true):
@@ -99,12 +110,6 @@ def f1_acc(y_pred, y_true):
     recall = tp / (tp + fn + epsilon)
     f1 = 2 * (precision * recall) / (precision + recall + epsilon)
     return f1
-
-#######################
-EPOCHS = 80
-BATCH_SIZE = 64
-LEARNING_RATE = 0.003
-#######################
 
 # ============
 # load dataset
@@ -130,26 +135,26 @@ X_train_enc = enc.transform(X_train).toarray()
 X_test_enc = enc.transform(X_test).toarray()
 print(enc.categories_)
 
+#=================
+# Standardize data
+# ================
+#scaler = StandardScaler()
+scaler = PowerTransformer()
+scaler.fit(X_train_enc)
+X_train_enc = scaler.transform(X_train_enc)
+X_test_enc = scaler.transform(X_test_enc)
+
 # =========
 # create NN
 # =========
 model = binaryClassification()
-device='cpu'
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 # consider reweighting the classes due to heavily imbalanced dataset
 pos_frac = np.sum(y_train)/len(y_train)
 pos_weight = (1-pos_frac)/pos_frac
 criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
-
-#=================
-# Standardize data
-# ================
-scaler = StandardScaler()
-scaler.fit(X_train_enc)
-X_train_enc = scaler.transform(X_train_enc)
-X_test_enc = scaler.transform(X_test_enc)
-
 
 # =================
 # run training loop
@@ -199,6 +204,24 @@ for epoch in range(1, EPOCHS+1):
     print(f'Epoch {epoch}. [Train] \t Time {time_.sum:.2f} Loss \
             {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
     train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
+
+# plot training process
+training = list()
+for key, values in train_results.items():
+    training.append([key, values[0], values[1], values[2]])
+training = list(map(list, zip(*training)))
+
+fig, axs = plt.subplots(2)
+fig.suptitle('Loss and accuracy per epoch')
+axs[0].plot(training[0], training[1], 'b')
+axs[0].set_ylabel('loss')
+axs[0].grid()
+axs[1].plot(training[0], training[2], 'b')
+axs[1].set_ylabel('accuracy')
+axs[1].set_xlabel('epoch')
+axs[1].grid()
+plt.show()
+
 
 # ===================
 # run prediction loop
