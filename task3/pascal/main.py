@@ -1,25 +1,9 @@
 """
-Task 3
+Task 3: Protein Mutation Classification
 Team Naiveoutliers
 Robin Schmid, Pascal Mueller, Marvin Harms
 May, 2021
 """
-
-
-# TODO:
-# - implement f1 score of sklearn, not own built in fct
-# - try cross entropy loss instead of binary classification loss
-# - later change model architecture, i.e. change layer sizes
-# - try char to ASCII (reduce dimension to 4)
-
-# DONE/TESTED:
-# - f1 score for weighted random sampler seems wrong (bigger than 1)? => tensor to numpy
-# - f1 score seems very low now, not handling the imbalanced dataset well, maybe there are better ways than just using a
-#   scaler to the data? => power transformer instead of standard scaler
-# - try weighting in binary classification loss to deal with imbalanced classes - implemented, does not give better
-#   results, error? => seems like that distribution is changed very extreme
-# - try splitting of data s.t. every split has 1 and 0 (uniform) => seems like that distribution is changed very extreme
-# - power transformer instead of standard scaler for rescaling of the data? => slightly better results
 
 import time as timing
 import seaborn as sns
@@ -37,13 +21,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.sampler import WeightedRandomSampler
 
 # hyperparameters
-EPOCHS = 80
-BATCH_SIZE = 64
-LEARNING_RATE = 0.003
-DROPOUT = 0.1
+EPOCHS = 60
+BATCH_SIZE = 512
+LEARNING_RATE = 0.001
 
 # set random seed
 np.random.seed(42)
@@ -98,25 +80,32 @@ class BinaryClassification(nn.Module):
     def __init__(self):
         super(BinaryClassification, self).__init__()
         self.classifier1 = nn.Sequential(
-            nn.Linear(len(X_test_scaled[0]), 64),
+
+            nn.Linear(len(X_test[0]), 128),
             nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.BatchNorm1d(128),
+
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Dropout(p=DROPOUT),
-            nn.Linear(64, 1)
+            nn.BatchNorm1d(128),
+
+            nn.Linear(128, 1)
         )
         self.classifier2 = nn.Sequential(
-            nn.Linear(len(X_test_scaled[0]), 64),
+
+            nn.Linear(len(X_test[0]), 128),
             nn.ReLU(),
-            nn.BatchNorm1d(64),
+            nn.BatchNorm1d(128),
+
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.BatchNorm1d(64),
-            nn.Dropout(p=DROPOUT),
-            nn.Linear(64, 1)
+            nn.BatchNorm1d(128),
+
+            nn.Linear(128, 1)
         )
 
     def forward(self, inputs):
-        return self.classifier1(inputs)
+        return self.classifier2(inputs)
 
 
 # manual f1 score computation
@@ -153,15 +142,15 @@ y_train = df_train['Active'].values
 # encode data with one hot encoding, preserve the order of the mutation
 enc = OneHotEncoder()
 enc.fit(X_train)
-X_train_encoded = enc.transform(X_train).toarray()
-X_test_encoded = enc.transform(X_test).toarray()
+X_train = enc.transform(X_train).toarray()
+X_test = enc.transform(X_test).toarray()
 print(enc.categories_)
 
 # scale data
 # scaler = StandardScaler()
 scaler = PowerTransformer()
-X_train_scaled = scaler.fit_transform(X_train_encoded)
-X_test_scaled = scaler.transform(X_test_encoded)
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
 # -----------------------------------------------------------------------------
 # network architecture
@@ -173,7 +162,6 @@ model = BinaryClassification().to(device)
 print(model)
 
 # define optimizer
-# optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 # define loss function
@@ -183,36 +171,8 @@ pos_weight = (1-pos_frac)/pos_frac
 criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight))
 
 # transform data into tensors for pytorch
-train_data = TrainData(torch.FloatTensor(X_train_scaled), torch.FloatTensor(y_train))
-test_data = TestData(torch.FloatTensor(X_test_scaled))
-
-# naive data loader for test data
-test_loader = DataLoader(dataset=test_data, batch_size=1)
-
-# # weighted random sampler for training data
-# print('target train 0/1: {}/{}'.format(
-#     len(np.where(y_train == 0)[0]), len(np.where(y_train == 1)[0])))
-#
-# class_sample_count = np.bincount(y_train)
-#
-# weight = 1. / class_sample_count
-# samples_weight = np.array([weight[k] for k in y_train])
-# samples_weight = torch.from_numpy(samples_weight)
-# samples_weight = samples_weight.double()
-#
-# sampler = torch.utils.data.sampler.WeightedRandomSampler(samples_weight, len(samples_weight))
-#
-# train_loader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=sampler)
-
-# naive data loader to training data
-train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-
-# print distribution of labels in mini-batches
-for i, (data, target) in enumerate(train_loader):
-    print("batch index {}, 0/1: {}/{}".format(
-        i,
-        len(np.where(target.numpy() == 0)[0]),
-        len(np.where(target.numpy() == 1)[0])))
+train_data = TrainData(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
+test_data = TestData(torch.FloatTensor(X_test))
 
 # -----------------------------------------------------------------------------
 # training loop
@@ -224,6 +184,9 @@ for epoch in range(1, EPOCHS+1):
     time_ = AverageMeter()
     loss_ = AverageMeter()
     acc_ = AverageMeter()
+
+    # load data per epoch
+    train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
 
     # iterate over training mini-batches
     for i, data, in enumerate(train_loader, 1):
@@ -279,6 +242,7 @@ plt.show()
 # perform predictions
 model.eval()
 y_pred_list = list()
+test_loader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
 for data in test_loader:
     with torch.no_grad():
         features = data.to(device)
@@ -288,4 +252,5 @@ for data in test_loader:
 
 # save predictions to csv file
 y_pred_list = [batch.squeeze().tolist() for batch in y_pred_list]
+y_pred_list = np.concatenate(y_pred_list).ravel().tolist()
 np.savetxt("predictions.csv", y_pred_list, fmt="%i")
