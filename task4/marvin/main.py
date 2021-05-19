@@ -9,6 +9,7 @@ import pandas as pd
 import tensorflow as tf
 import keras
 import os,time
+import matplotlib.pyplot as plt
 # example of using a pre-trained model as a classifier
 from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
@@ -22,6 +23,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import sklearn
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import KFold, train_test_split
+
 
 
 #######################
@@ -94,7 +98,6 @@ class binaryClassification(nn.Module):
             nn.Sigmoid()
         )
 
-
     def forward(self, inputs):
         prediction = self.classifier2(inputs)
         return prediction
@@ -115,15 +118,16 @@ def get_image(filename):
 
 handout_path = "/home/marvin/Downloads/IML_handout_task4/"
 
-# ===========
-# setup model
-# ===========
-# we use the pretrained model
-model = tf.keras.Sequential()
-model = ResNet50(include_top=True)
-model.summary()
 
 if not USE_PREPROCESSED:
+    # ===========
+    # setup model
+    # ===========
+    # we use the pretrained model
+    model = tf.keras.Sequential()
+    model = ResNet50(include_top=True)
+    model.summary()
+
     # =====================================
     # predict image classes (preprocessing)
     # =====================================
@@ -176,8 +180,8 @@ iterations = len(df_train.values)
 for triplet in df_train.values:
     triplet = [int(img) for img in triplet[0].split(' ')]
     # for each triplet, we can construct two possible outputs by switching image B and C
-    row1 = [df.loc[triplet[0]].values,df.loc[triplet[1]].values,df.loc[triplet[2]].values]
-    row2 = [df.loc[triplet[0]].values,df.loc[triplet[2]].values,df.loc[triplet[1]].values]
+    row1 = np.c_[df.loc[triplet[0]].values,df.loc[triplet[1]].values,df.loc[triplet[2]].values]
+    row2 = np.c_[df.loc[triplet[0]].values,df.loc[triplet[2]].values,df.loc[triplet[1]].values]
     if counter==0:
         X_train = np.concatenate((row1,row2),axis=0)
         y_train = np.concatenate(([1],[0]),axis=0)
@@ -188,6 +192,10 @@ for triplet in df_train.values:
 
     counter += 1
     print(counter/iterations)
+
+df_train_features = pd.DataFrame(data=X_train)
+df_train_labels = pd.DataFrame(data=y_train)
+df_train_features.to_csv(handout_path+'train_features.csv')
 
 # ===================
 # construct test data
@@ -205,9 +213,11 @@ for triplet in df_test.values:
     else:
         X_test = np.concatenate((X_train,row1,row2),axis=0)
 
-
     counter += 1
     print(counter/iterations)
+    
+df_test_features = pd.DataFrame(data=X_test)
+df_test_features.to_csv(handout_path+'test_features.csv')
 
 # ====================
 # create NN classifier
@@ -215,7 +225,7 @@ for triplet in df_test.values:
 model = binaryClassification()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 model.to(device)
-criterion = nn.BCEWithLogitsLoss()
+criterion = nn.BCELoss()
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
 
 # =================
@@ -258,7 +268,7 @@ for epoch in range(1, EPOCHS+1):
         optimizer.step()
 
         # Accounting
-        acc = f1_acc(torch.round(torch.sigmoid(prediction)), labels.unsqueeze(1))
+        acc = accuracy_score(torch.round(prediction), labels.unsqueeze(1))
         loss_.update(loss.mean().item(), bs)
         acc_.update(acc.item(), bs)
         time_.update(time.time() - end)
