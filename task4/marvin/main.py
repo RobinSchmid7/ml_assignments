@@ -8,11 +8,12 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import keras
+import os,time
 # example of using a pre-trained model as a classifier
 from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.applications.vgg16 import preprocess_input
-from keras.applications.vgg16 import decode_predictions
+from keras.applications.resnet50 import decode_predictions
 from keras.applications.resnet50 import ResNet50
 from keras.layers import Flatten
 from keras.layers import Dense
@@ -20,20 +21,22 @@ from keras.models import Model
 
 
 
-def get_image(number):
+def get_image(filename):
     global handout_path
-    img = load_img(handout_path+'/food/'+str(number)+'.jpg', target_size=(224, 224))
+    img = load_img(handout_path+'/food/'+filename, target_size=(224, 224))
     img = img_to_array(img)
     return img
 
-def stack_images(img1,img2,img3):
-    pass
+# IDEA: PREDICT CLASS LABELS FOR EACH IMAGE INDEPENDENTLY.
+# THEN, WE SAVE THE 1000-DIM OUTPUT VECTOR OF EACH IMAGE AS A NEW FEATURE VECTOR.
+# WE THEN TRAIN A NEURAL NETWORK WITH 2x1000 INPUTS AND ONE SINGLE OUTPUT 
+# TO PREDICT A TASTE SIMILARITY BETWEEN THE TWO INPUTS IN RANGE [0,1].
 
 
 # =========
 # load data
 # =========
-handout_path = "/home/marvin/Downloads/IML_handout_task4"
+handout_path = "/home/marvin/Downloads/IML_handout_task4/"
 # load an image from file
 df_train = pd.read_csv(handout_path+'/train_triplets.txt')
 df_test = pd.read_csv(handout_path+'/test_triplets.txt')
@@ -45,33 +48,35 @@ df_test = pd.read_csv(handout_path+'/test_triplets.txt')
 # the input layer includes 3 stacked images with 3 layers each
 # the output is a scalar in range [0,1]
 model = tf.keras.Sequential()
-ResNet = ResNet50(include_top=False, input_shape=(224,224,3))
-# mark loaded layers as not trainable
-for layer in ResNet.layers:
-	layer.trainable = False
-
-# add new classifier layers
-model.add(ResNet)
-model.add(Flatten())
-model.add(Dense(1024, activation='relu'))
-model.add(Dense(1024, activation='relu'))
-model.add(Dense(1, activation='sigmoid'))
-# define new model
-#model = Model(inputs=model.inputs, outputs=output)
-# summarize
+model = ResNet50(include_top=True)
 model.summary()
 
 
+# predict image classes
+header = []
+for i in range(1000):
+    header.append(str(i+1))
+    
+df = pd.DataFrame(columns=header)
+imagenames = sorted(os.listdir(handout_path+'food/'))
 
-image = get_image('00001')
-# reshape data for the model
-image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
-# prepare the image for the VGG model
-image = preprocess_input(image)
-# load the model
-# predict the probability across all output classes
-yhat = model.predict(image)
-# retrieve the most likely result, e.g. highest probability
-label = yhat[0][0]
-# print the classification
-print(yhat)
+for filename in sorted(os.listdir(handout_path+'food/')):
+    if filename.endswith('.jpg'):
+        print('\n'+filename)
+        image = get_image(filename)
+        # reshape data for the model
+        image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+        # prepare the image for the model
+        image = preprocess_input(image)
+        # predict the probability across all output classes
+        yhat = model.predict(image)
+        # retrieve the most likely result, e.g. highest probability
+        label = decode_predictions(yhat)
+        # retrieve the most likely result, e.g. highest probability
+        label = label[0][0]
+ 
+        print('%s (%.2f%%)' % (label[1], label[2]*100))
+        # append the probabilities to dataframe
+        df.loc[filename] = yhat[0][:]
+
+df.to_csv(handout_path+'class_probabilities.csv')
