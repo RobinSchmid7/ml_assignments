@@ -168,8 +168,10 @@ else:
 # find most common classes
 # ========================
 class_mean = df.mean(axis=0)
-# only use classes which are more present than the mean of all classes
-reduced_classes = [idx for idx, c in enumerate(class_mean) if c > class_mean.mean()]
+# only use classes which are more present a certain threshold in images
+threshold = class_mean.mean() + 0.2 * class_mean.std()
+reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
+# print(len(reduced_classes))
 df = df.iloc[:,reduced_classes]
 
 if not LOAD_PREPARED_TRAINING_DATA:
@@ -193,8 +195,8 @@ if not LOAD_PREPARED_TRAINING_DATA:
     for i, triplet in enumerate(tqdm(df_train.values)):
         triplet = [int(img) for img in triplet[0].split(' ')]
         # for each triplet, we can construct two possible outputs by switching image B and C
-        df_train_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
-        df_train_features.loc[i+1] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))
+        df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T)
+        df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))).T)
 
     # label is 1 if A is closer to B and 0 if A is closer to C
     df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 1, 0), columns=['label'])
@@ -229,6 +231,7 @@ model.to(device)
 criterion = nn.BCELoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+# TODO: maybe need another preprocessing for the data?
 X_train = df_train_features.values
 y_train = df_train_labels.values
 X_test = df_test_features.values
@@ -318,4 +321,3 @@ for data in tqdm(test_loader):
 y_pred_list = [batch.squeeze().tolist() for batch in y_pred_list]
 y_pred_list = np.concatenate(y_pred_list).ravel().tolist()
 np.savetxt("predictions.csv", y_pred_list, fmt="%i")
-
