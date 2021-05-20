@@ -169,6 +169,7 @@ else:
 # ========================
 class_mean = df.mean(axis=0)
 # only use classes which are more present a certain threshold in images
+# TODO: tune this
 threshold = class_mean.mean() + 0.2 * class_mean.std()
 reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
 # print(len(reduced_classes))
@@ -191,12 +192,11 @@ if not LOAD_PREPARED_TRAINING_DATA:
         header.append('C_feature'+str(i+1))
 
     df_train_features = pd.DataFrame(columns=header)
-
-    for i, triplet in enumerate(tqdm(df_train.values)):
+    for triplet in tqdm(df_train.values):
         triplet = [int(img) for img in triplet[0].split(' ')]
         # for each triplet, we can construct two possible outputs by switching image B and C
-        df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T)
-        df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))).T)
+        df_train_features = df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,ignore_index=True)
+        df_train_features = df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))).T,ignore_index=True)
 
     # label is 1 if A is closer to B and 0 if A is closer to C
     df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 1, 0), columns=['label'])
@@ -208,9 +208,9 @@ if not LOAD_PREPARED_TRAINING_DATA:
     # construct test data
     # ===================
     df_test_features = pd.DataFrame(columns=header)
-    for i, triplet in enumerate(tqdm(df_test.values)):
+    for triplet in tqdm(df_test.values):
         triplet = [int(img) for img in triplet[0].split(' ')]
-        df_test_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
+        df_test_features = df_test_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,ignore_index=True)
 
     df_test_features.to_csv(handout_path + 'test_features.csv')
 
