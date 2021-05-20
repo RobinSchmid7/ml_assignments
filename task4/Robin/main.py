@@ -195,8 +195,10 @@ if not LOAD_PREPARED_TRAINING_DATA:
     for triplet in tqdm(df_train.values):
         triplet = [int(img) for img in triplet[0].split(' ')]
         # for each triplet, we can construct two possible outputs by switching image B and C
-        df_train_features = df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,ignore_index=True)
-        df_train_features = df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))).T,ignore_index=True)
+        # df_train_features = df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,ignore_index=True)
+        # df_train_features = df_train_features.append(pd.DataFrame(np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))).T,ignore_index=True)
+        # this is faster
+        df_train_features = df_train_features.append(pd.DataFrame(np.vstack((np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values)), np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))))))
 
     # label is 1 if A is closer to B and 0 if A is closer to C
     df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 1, 0), columns=['label'])
