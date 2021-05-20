@@ -190,7 +190,6 @@ for i in range(len(df.columns)):
 
 # comment
 df_train_features = pd.DataFrame(columns=header)
-df_train_labels = pd.DataFrame(columns=['label'])
 
 for i, triplet in enumerate(tqdm(df_train.values)):
     triplet = [int(img) for img in triplet[0].split(' ')]
@@ -198,8 +197,7 @@ for i, triplet in enumerate(tqdm(df_train.values)):
     df_train_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
     df_train_features.loc[i+1] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))
 
-    df_train_labels.loc[i] = [1]
-    df_train_labels.loc[i+1] = [0]
+df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 1, 0), columns=['label'])
 
 df_train_features.to_csv(handout_path+'train_features.csv')
 df_train_labels.to_csv(handout_path+'train_labels.csv')
