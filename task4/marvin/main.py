@@ -162,7 +162,7 @@ else:
     # ========================
     # load preprocessed images
     # ========================
-    df = pd.read_csv(handout_path+'class_probabilities.csv')
+    df = pd.read_csv(handout_path+'class_probabilities.csv',index_col=0)
 
 # =====================================
 # split the data in train and test sets
@@ -173,50 +173,48 @@ df_test = pd.read_csv(handout_path+'/test_triplets.txt')
 # =======================
 # construct training data
 # =======================
-X_train = []
-y_train = []
-counter = 0
+header = []
+for i in range(1000):
+    header.append('A_feature'+str(i+1))
+    header.append('B_feature'+str(i+1))
+    header.append('C_feature'+str(i+1))
+
+df_train_features = pd.DataFrame(columns=header)
+df_train_labels = pd.DataFrame(columns=['label'])
+i = 1
 iterations = len(df_train.values)
 for triplet in df_train.values:
     triplet = [int(img) for img in triplet[0].split(' ')]
     # for each triplet, we can construct two possible outputs by switching image B and C
     row1 = np.c_[df.loc[triplet[0]].values,df.loc[triplet[1]].values,df.loc[triplet[2]].values]
     row2 = np.c_[df.loc[triplet[0]].values,df.loc[triplet[2]].values,df.loc[triplet[1]].values]
-    if counter==0:
-        X_train = np.concatenate((row1,row2),axis=0)
-        y_train = np.concatenate(([1],[0]),axis=0)
+    row1 = [item for sublist in row1 for item in sublist]
+    row2 = [item for sublist in row2 for item in sublist]
+    df_train_features.loc[str(i)] = row1
+    df_train_labels.loc[str(i)] = [1]
+    i += 1
+    df_train_features.loc[i] = row2
+    df_train_labels.loc[i] = [0]
+    i += 1
+    print(i/iterations*0.5)
 
-    else:
-        X_train = np.concatenate((X_train,row1,row2),axis=0)
-        y_train = np.concatenate((y_train,[1],[0]),axis=0)
-
-    counter += 1
-    print(counter/iterations)
-
-df_train_features = pd.DataFrame(data=X_train)
-df_train_labels = pd.DataFrame(data=y_train)
 df_train_features.to_csv(handout_path+'train_features.csv')
+df_train_labels.to_csv(handout_path+'train_labels.csv')
 
 # ===================
 # construct test data
 # ===================
-X_test = []
-y_test = []
-counter = 0
+df_test_features = pd.DataFrame(columns=header)
+i = 1
 iterations = len(df_test.values)
 for triplet in df_test.values:
     triplet = [int(img) for img in triplet[0].split(' ')]
-    row = [df.loc[triplet[0]].values,df.loc[triplet[1]].values,df.loc[triplet[2]].values]
-    if counter==0:
-        X_test = row
+    row = np.c_[df.loc[triplet[0]].values,df.loc[triplet[1]].values,df.loc[triplet[2]].values]
+    row = [item for sublist in row for item in sublist]
+    df_test_features.loc[i] = row
+    i += 1
+    print(i/iterations)
 
-    else:
-        X_test = np.concatenate((X_train,row1,row2),axis=0)
-
-    counter += 1
-    print(counter/iterations)
-    
-df_test_features = pd.DataFrame(data=X_test)
 df_test_features.to_csv(handout_path+'test_features.csv')
 
 # ====================
@@ -304,7 +302,6 @@ for data in test_loader:
     with torch.no_grad():
         features = data.to(device)
         prediction = model(features)
-        prediction = torch.sigmoid(prediction)
         y_pred = torch.round(prediction)
         y_pred_list.append(y_pred.cpu().numpy())               
 
