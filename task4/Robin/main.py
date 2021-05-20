@@ -27,10 +27,9 @@ import sklearn
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold, train_test_split
 
-
-
 #######################
-USE_PREPROCESSED = True
+LOAD_PREPROCESSED = True
+LOAD_PREPARED_TRAINING_DATA = False
 LEARNING_RATE = 0.0002
 BATCHSIZE = 64
 EPOCHS = 10
@@ -120,7 +119,7 @@ def get_image(filename):
 handout_path = "../handout_task4/"
 
 
-if not USE_PREPROCESSED:
+if not LOAD_PREPROCESSED:
     # ===========
     # setup model
     # ===========
@@ -157,13 +156,13 @@ if not USE_PREPROCESSED:
             # append the probabilities to dataframe
             df.loc[filename[0:-4]] = yhat[0][:]
 
-    df.to_csv(handout_path+'class_probabilities.csv')
+    df.to_csv(handout_path + 'class_probabilities.csv')
 
 else:
     # ========================
     # load preprocessed images
     # ========================
-    df = pd.read_csv(handout_path+'class_probabilities.csv',index_col=0)
+    df = pd.read_csv(handout_path + 'class_probabilities.csv',index_col=0)
 
 # ========================
 # find most common classes
@@ -173,44 +172,53 @@ class_mean = df.mean(axis=0)
 reduced_classes = [idx for idx, c in enumerate(class_mean) if c > class_mean.mean()]
 df = df.iloc[:,reduced_classes]
 
-# =====================================
-# split the data in train and test sets
-# =====================================
-df_train = pd.read_csv(handout_path+'/train_triplets.txt')
-df_test = pd.read_csv(handout_path+'/test_triplets.txt')
+if not LOAD_PREPARED_TRAINING_DATA:
+    # =====================================
+    # split the data in train and test sets
+    # =====================================
+    df_train = pd.read_csv(handout_path + '/train_triplets.txt')
+    df_test = pd.read_csv(handout_path + '/test_triplets.txt')
 
-# =======================
-# construct training data
-# =======================
-header = []
-for i in range(len(df.columns)):
-    header.append('A_feature'+str(i+1))
-    header.append('B_feature'+str(i+1))
-    header.append('C_feature'+str(i+1))
+    # =======================
+    # construct training data
+    # =======================
+    header = []
+    for i in range(len(df.columns)):
+        header.append('A_feature'+str(i+1))
+        header.append('B_feature'+str(i+1))
+        header.append('C_feature'+str(i+1))
 
-# comment
-df_train_features = pd.DataFrame(columns=header)
+    df_train_features = pd.DataFrame(columns=header)
 
-for i, triplet in enumerate(tqdm(df_train.values)):
-    triplet = [int(img) for img in triplet[0].split(' ')]
-    # for each triplet, we can construct two possible outputs by switching image B and C
-    df_train_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
-    df_train_features.loc[i+1] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))
+    for i, triplet in enumerate(tqdm(df_train.values)):
+        triplet = [int(img) for img in triplet[0].split(' ')]
+        # for each triplet, we can construct two possible outputs by switching image B and C
+        df_train_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
+        df_train_features.loc[i+1] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))
 
-df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 1, 0), columns=['label'])
+    # label is 1 if A is closer to B and 0 if A is closer to C
+    df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 1, 0), columns=['label'])
 
-df_train_features.to_csv(handout_path+'train_features.csv')
-df_train_labels.to_csv(handout_path+'train_labels.csv')
+    df_train_features.to_csv(handout_path + 'train_features.csv')
+    df_train_labels.to_csv(handout_path + 'train_labels.csv')
 
-# ===================
-# construct test data
-# ===================
-df_test_features = pd.DataFrame(columns=header)
-for i, triplet in enumerate(tqdm(df_test.values)):
-    triplet = [int(img) for img in triplet[0].split(' ')]
-    df_test_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
+    # ===================
+    # construct test data
+    # ===================
+    df_test_features = pd.DataFrame(columns=header)
+    for i, triplet in enumerate(tqdm(df_test.values)):
+        triplet = [int(img) for img in triplet[0].split(' ')]
+        df_test_features.loc[i] = np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))
 
-df_test_features.to_csv(handout_path+'test_features.csv')
+    df_test_features.to_csv(handout_path + 'test_features.csv')
+
+else:
+    # =====================
+    # load constructed data
+    # =====================
+    df_train_features = pd.read_csv(handout_path + 'train_features.csv')
+    df_train_labels = pd.read_csv(handout_path + 'train_labels.csv')
+    df_test_features = pd.read_csv(handout_path + 'test_features.csv')
 
 # ====================
 # create NN classifier
@@ -219,7 +227,7 @@ model = binaryClassification()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 criterion = nn.BCELoss()
-optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 X_train = df_train_features.values
 y_train = df_train_labels.values
