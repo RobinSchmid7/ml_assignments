@@ -5,7 +5,7 @@ Team Naiveoutliers
 Robin Schmid, Pascal Mueller, Marvin Harms
 May, 2021
 
-Version 1.1
+Version 1.2
 
 Usage: python main.py --eps 100 --bsz 64 --lr 0.002
 """
@@ -37,6 +37,7 @@ from torch.utils.data import Dataset, DataLoader
 import sklearn
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold, train_test_split
+from sklearn.preprocessing import PowerTransformer
 
 # better save than sorry
 import ssl
@@ -114,12 +115,11 @@ class BinaryClassification(nn.Module):
         self.classifier1 = nn.Sequential(
             nn.Linear(len(X_train[0]), 256),
             nn.ReLU(),
+            nn.Dropout(p=0.1),
             nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(256, 64),
-            nn.ReLU(),
             nn.Dropout(p=0.1),
-            nn.Linear(64, 1),
+            nn.Linear(256, 1),
             nn.Sigmoid()
         )
         self.classifier2 = nn.Sequential(
@@ -254,7 +254,7 @@ if __name__ == '__main__':
     # ===============
     # PARSE ARGUMENTS
     # ===============
-    parser = argparse.ArgumentParser(description='Hyperparameter for NN')
+    parser = argparse.ArgumentParser(description='Hyperparameters for NN')
     parser.add_argument('--eps', type=int, default=EPOCHS, help='epochs')
     parser.add_argument('--bsz', type=int, default=BATCHSIZE, help='batchsize')
     parser.add_argument('--lr', type=float, default=LEARNING_RATE, help='learning rate')
@@ -372,11 +372,15 @@ if __name__ == '__main__':
     # ====================
     # CREATE NN CLASSIFIER
     # ====================
-    # TODO: maybe need another preprocessing for the data?
     # extract training and test data
-    X_train = df_train_features.values
     y_train = df_train_labels.values
     X_test = df_test_features.values
+    X_train = df_train_features.values
+
+    # TODO: maybe need another preprocessing for the features, e.g PowerTransformer?
+    scaler = PowerTransformer()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
 
     # define model, loss and optimizer
     model = BinaryClassification()
