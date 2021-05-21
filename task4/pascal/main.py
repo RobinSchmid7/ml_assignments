@@ -49,8 +49,11 @@ BATCHSIZE = 64
 EPOCHS = 10
 #######################
 
+HANDOUT_PATH = "../handout/"
+
 # set random seed
 np.random.seed(42)
+torch.manual_seed(42)
 
 
 class AverageMeter:
@@ -123,8 +126,8 @@ class BinaryClassification(nn.Module):
 
 
 def get_image(filename):
-    global handout_path
-    img = load_img(handout_path + '/food/' + filename, target_size=(224, 224))
+    global HANDOUT_PATH
+    img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(224, 224))
     img = img_to_array(img)
     return img
 
@@ -150,8 +153,6 @@ def test_construction():
 # TO PREDICT A TASTE SIMILARITY BETWEEN THE TWO INPUTS IN RANGE [0,1].
 # =======================================================================================
 
-handout_path = "../handout/"
-
 # =============
 # PREPROCESSING
 # =============
@@ -171,8 +172,8 @@ if not LOAD_PREPROCESSED:
         header.append('class' + str(i + 1))
 
     df = pd.DataFrame(columns=header)
-    imagenames = sorted(os.listdir(handout_path + 'food/'))
-    for filename in tqdm(sorted(os.listdir(handout_path + 'food/'))):
+    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
+    for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
         if filename.endswith('.jpg'):
             print('\n' + filename)
             image = get_image(filename)
@@ -190,12 +191,12 @@ if not LOAD_PREPROCESSED:
             # append the probabilities to dataframe
             df.loc[filename[0:-4]] = yhat[0][:]
 
-    df.to_csv(handout_path + 'class_probabilities.csv')
+    df.to_csv(HANDOUT_PATH + 'class_probabilities.csv')
     print('elapsed time \t', time.time() - start)
 
 else:
     # load preprocessed images
-    df = pd.read_csv(handout_path + 'class_probabilities.csv', index_col=0)
+    df = pd.read_csv(HANDOUT_PATH + 'class_probabilities.csv', index_col=0)
 
 # ===============
 # CLASS REDUCTION
@@ -216,14 +217,14 @@ else:
 # df_reduced = df.iloc[:, reduced_classes]
 # df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
 # plot_heatmap(df_reduced)
-# df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
+# df_reduced.to_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv')
 #
 # # clean up
 # df = df_reduced
 #
 # print('elapsed time \t', time.time() - start)
 
-df = pd.read_csv(handout_path + 'reduced_class_probabilities.csv', index_col=0)
+df = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv', index_col=0)
 
 # ================
 # PREPARE TRIPLETS
@@ -233,8 +234,8 @@ if not LOAD_PREPARED_TRAINING_DATA:
     start = time.time()
 
     # load the triplets
-    df_train = pd.read_csv(handout_path + '/train_triplets_test.txt', header=None)
-    df_test = pd.read_csv(handout_path + '/test_triplets_test.txt', header=None)
+    df_train = pd.read_csv(HANDOUT_PATH + '/train_triplets.txt', header=None)
+    df_test = pd.read_csv(HANDOUT_PATH + '/test_triplets.txt', header=None)
 
     # get numpy representation for reduced class probabilities
     classes = df.to_numpy()
@@ -283,8 +284,8 @@ if not LOAD_PREPARED_TRAINING_DATA:
     print(df_train_labels.head())
 
     # write prepared data to csv file
-    df_train_features.to_csv(handout_path + 'train_features.csv', index=False)
-    df_train_labels.to_csv(handout_path + 'train_labels.csv', index=False)
+    df_train_features.to_csv(HANDOUT_PATH + 'train_features.csv', index=False)
+    df_train_labels.to_csv(HANDOUT_PATH + 'train_labels.csv', index=False)
 
     # TODO: add test to check whether construction is as intended
 
@@ -308,7 +309,7 @@ if not LOAD_PREPARED_TRAINING_DATA:
     print(df_test_features.head())
 
     # write prepared data to csv file
-    df_test_features.to_csv(handout_path + 'test_features.csv', index=False)
+    df_test_features.to_csv(HANDOUT_PATH + 'test_features.csv', index=False)
 
     # TODO: add test to check whether construction is as intended
 
@@ -316,9 +317,9 @@ if not LOAD_PREPARED_TRAINING_DATA:
 
 else:
     # load constructed data
-    df_train_features = pd.read_csv(handout_path + 'train_features.csv')
-    df_train_labels = pd.read_csv(handout_path + 'train_labels.csv')
-    df_test_features = pd.read_csv(handout_path + 'test_features.csv')
+    df_train_features = pd.read_csv(HANDOUT_PATH + 'train_features.csv')
+    df_train_labels = pd.read_csv(HANDOUT_PATH + 'train_labels.csv')
+    df_test_features = pd.read_csv(HANDOUT_PATH + 'test_features.csv')
 
 # ====================
 # create NN classifier
