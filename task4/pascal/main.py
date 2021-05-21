@@ -254,7 +254,7 @@ if not LOAD_PREPARED_TRAINING_DATA:
     # =======================
     # assign for each triplet its probability to each of the main classes
     features = np.ndarray(shape=(2 * len(df_train), 3 * len(classes[0])))
-    for i, triplet in enumerate((df_train.to_numpy())):
+    for i, triplet in tqdm(enumerate((df_train.to_numpy()))):
         # get image ids per triple
         imgs = [int(img) for img in triplet[0].split(' ')]
 
@@ -266,8 +266,8 @@ if not LOAD_PREPARED_TRAINING_DATA:
         # features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
 
         # ordering A1 B1 C1 ...
-        features[i, :] = transpose_classes(classes[imgs[0]], classes[imgs[1]], classes[imgs[2]])
-        features[i+1, :] = transpose_classes(classes[imgs[0]], classes[imgs[2]], classes[imgs[1]])
+        features[2*i, :] = transpose_classes(classes[imgs[0]], classes[imgs[1]], classes[imgs[2]])
+        features[2*i+1, :] = transpose_classes(classes[imgs[0]], classes[imgs[2]], classes[imgs[1]])
 
     # transform array to pandas dataframe
     df_train_features = pd.DataFrame(features)
@@ -290,7 +290,7 @@ if not LOAD_PREPARED_TRAINING_DATA:
     # construct test data
     # ===================
     features = np.ndarray(shape=(len(df_test), 3 * len(classes[0])))
-    for i, triplet in enumerate((df_test.to_numpy())):
+    for i, triplet in tqdm(enumerate((df_test.to_numpy()))):
         # get image ids per triple
         imgs = [int(img) for img in triplet[0].split(' ')]
 
