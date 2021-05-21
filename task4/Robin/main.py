@@ -46,7 +46,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 # DATA LOADING
 LOAD_PREPROCESSED = True
 LOAD_PREPARED_TRAINING_DATA = True
-THRESHOLD_STD = 0.2
+THRESHOLD_STD = 0.02
 
 # HYPERPARAMETERS
 LEARNING_RATE = 0.002
@@ -307,7 +307,7 @@ if __name__ == '__main__':
         class_mean = df_images.mean(axis=0)
         threshold = class_mean.mean() + THRESHOLD_STD * class_mean.std()  # TODO: tune this
         reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-        # print(len(reduced_classes))
+        print(len(reduced_classes))
 
         # prepare data frame with reduced classes
         df_reduced = df_images.iloc[:, reduced_classes]
