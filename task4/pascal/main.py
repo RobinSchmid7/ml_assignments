@@ -4,6 +4,8 @@ Task 4: Image taste classification
 Team Naiveoutliers
 Robin Schmid, Pascal Mueller, Marvin Harms
 May, 2021
+
+Version 1.0
 """
 
 import numpy as np
@@ -44,7 +46,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 #######################
 LOAD_PREPROCESSED = True
 LOAD_PREPARED_TRAINING_DATA = False
-THRESHOLD_STD = 0.4
+THRESHOLD_STD = 0.1
 LEARNING_RATE = 0.002
 BATCHSIZE = 64
 EPOCHS = 50
