@@ -16,6 +16,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
 
+# improve pandas
+import numba
+
 # example of using a pre-trained model as a classifier
 from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
@@ -131,8 +134,22 @@ def plot_heatmap(data):
     plt.show()
 
 
+# DEPRECATED
+def compute_pandas(df, df_train):
+    df_train_features = pd.DataFrame()
+    for triplet in tqdm(df_train.values):
+        triplet = [int(img) for img in triplet[0].split(' ')]
+
+        # for each triplet, we can construct two possible outputs by switching image B and C
+        # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
+        df_train_features = df_train_features.append(pd.DataFrame(np.vstack((np.hstack(
+            (df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values)), np.hstack(
+            (df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))))))
+    return df_train_features
+
+
 # TODO
-def test_construction(df_constructed, df_real):
+def test_construction():
     return 0
 
 
@@ -193,29 +210,30 @@ else:
 # ===============
 # CLASS REDUCTION
 # ===============
-print('Reduce classes...')
-start = time.time()
+# print('Reduce classes...')
+# start = time.time()
+#
+# # heat map of class probabilities
+# plot_heatmap(df)
+#
+# # only use classes which are more present a certain threshold in images
+# class_mean = df.mean(axis=0)
+# threshold = class_mean.mean() + 0.2 * class_mean.std()  # TODO: tune this
+# reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
+# print(len(reduced_classes))
+#
+# # prepare data frame with reduced classes
+# df_reduced = df.iloc[:, reduced_classes]
+# df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
+# plot_heatmap(df_reduced)
+# df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
+#
+# # clean up
+# df = df_reduced
+#
+# print('elapsed time \t', time.time() - start)
 
-# heat map of class probabilities
-plot_heatmap(df)
-
-# only use classes which are more present a certain threshold in images
-class_mean = df.mean(axis=0)
-threshold = class_mean.mean() + 0.2 * class_mean.std()  # TODO: tune this
-reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-print(len(reduced_classes))
-
-# prepare data frame with reduced classes
-df_reduced = df.iloc[:, reduced_classes]
-df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
-plot_heatmap(df_reduced)
-df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
-
-# clean up
-df = df_reduced
-
-print('elapsed time \t', time.time() - start)
-
+df = pd.read_csv(handout_path + 'reduced_class_probabilities.csv', index_col=0)
 
 # ================
 # PREPARE TRIPLETS
@@ -228,25 +246,31 @@ if not LOAD_PREPARED_TRAINING_DATA:
     df_train = pd.read_csv(handout_path + '/train_triplets.txt', header=None)
     df_test = pd.read_csv(handout_path + '/test_triplets.txt', header=None)
 
-    # =======================
-    # construct training data
-    # =======================
+    # get numpy representation for reduced class probabilities
+    classes = df.to_numpy()
+
     # construct header, A1 A2 ... B1 B2 ... C1 C2 ...
     header = list()
     header.extend(['A_feature'+str(i+1) for i in range(len(df.columns))])
     header.extend(['B_feature'+str(i+1) for i in range(len(df.columns))])
     header.extend(['C_feature'+str(i+1) for i in range(len(df.columns))])
 
+    # =======================
+    # construct training data
+    # =======================
     # assign for each triplet its probability to each of the main classes
-    df_train_features = pd.DataFrame()
-    for triplet in tqdm(df_train.values):
-        triplet = [int(img) for img in triplet[0].split(' ')]
+    features = np.ndarray(shape=(2 * len(df_train), 3 * len(classes[0])))
+    iter = 0
+    for triplet in tqdm(df_train.to_numpy()):
+        # get image ids per triple
+        imgs = [int(img) for img in triplet[0].split(' ')]
 
         # for each triplet, we can construct two possible outputs by switching image B and C
         # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
-        df_train_features = df_train_features.append(pd.DataFrame(np.vstack((np.hstack(
-            (df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values)), np.hstack(
-            (df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))))))
+        features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
+        features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
+        iter += 2
+    df_train_features = pd.DataFrame(features)
 
     # add header to dataframe
     df_train_features.columns = header
@@ -267,13 +291,22 @@ if not LOAD_PREPARED_TRAINING_DATA:
     # ===================
     # construct test data
     # ===================
-    df_test_features = pd.DataFrame()
-    for triplet in tqdm(df_test.values):
-        triplet = [int(img) for img in triplet[0].split(' ')]
-        df_test_features = df_test_features.append(pd.DataFrame(
-            np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,
-                                                   ignore_index=True)
+    features = np.ndarray(shape=(len(df_test), 3 * len(classes[0])))
+    iter = 0
+    for triplet in tqdm(df_test.to_numpy()):
+        # get image ids per triple
+        imgs = [int(img) for img in triplet[0].split(' ')]
+
+        # construct test data
+        features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
+        iter += 1
+
+    # create dataframe from test data
+    df_test_features = pd.DataFrame(features)
     df_test_features.columns = header
+    print(df_test_features.head())
+
+    # write prepared data to csv file
     df_test_features.to_csv(handout_path + 'test_features.csv', index=False)
 
     # TODO: add test to check whether construction is as intended
