@@ -40,7 +40,6 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 #######################
 LOAD_PREPROCESSED = True
-LOAD_REDUCED = True
 LOAD_PREPARED_TRAINING_DATA = False
 LEARNING_RATE = 0.0002
 BATCHSIZE = 64
@@ -132,6 +131,11 @@ def plot_heatmap(data):
     plt.show()
 
 
+# TODO
+def test_construction(df_constructed, df_real):
+    return 0
+
+
 # =======================================================================================
 # IDEA: PREDICT CLASS LABELS FOR EACH IMAGE INDEPENDENTLY.
 # THEN, WE SAVE THE 1000-DIM OUTPUT VECTOR OF EACH IMAGE AS A NEW FEATURE VECTOR.
@@ -182,42 +186,35 @@ if not LOAD_PREPROCESSED:
     df.to_csv(handout_path + 'class_probabilities.csv')
     print('elapsed time \t', time.time() - start)
 
-# ===============
-# CLASS REDUCTION
-# ===============
-elif LOAD_PREPROCESSED and not LOAD_REDUCED:
-    print('Reduce classes...')
-    start = time.time()
-
+else:
     # load preprocessed images
     df = pd.read_csv(handout_path + 'class_probabilities.csv', index_col=0)
 
-    # heat map of class probabilities
-    plot_heatmap(df)
+# ===============
+# CLASS REDUCTION
+# ===============
+print('Reduce classes...')
+start = time.time()
 
-    # only use classes which are more present a certain threshold in images
-    class_mean = df.mean(axis=0)
-    threshold = class_mean.mean() + 0.2 * class_mean.std()  # TODO: tune this
-    reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-    print(len(reduced_classes))
+# heat map of class probabilities
+plot_heatmap(df)
 
-    # prepare data frame with reduced classes
-    df_reduced = df.iloc[:, reduced_classes]
-    df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
-    plot_heatmap(df_reduced)
-    df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
+# only use classes which are more present a certain threshold in images
+class_mean = df.mean(axis=0)
+threshold = class_mean.mean() + 0.2 * class_mean.std()  # TODO: tune this
+reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
+print(len(reduced_classes))
 
-    # clean up
-    df = df_reduced
+# prepare data frame with reduced classes
+df_reduced = df.iloc[:, reduced_classes]
+df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
+plot_heatmap(df_reduced)
+df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
 
-    print('elapsed time \t', time.time() - start)
+# clean up
+df = df_reduced
 
-# load preprocessed and reduced image classes
-else:
-    print('Load reduced classes...')
-    # load reduced class probabilities
-    df = pd.read_csv(handout_path + 'reduced_class_probabilities.csv', index_col=0)
-    print('...done')
+print('elapsed time \t', time.time() - start)
 
 
 # ================
@@ -228,13 +225,13 @@ if not LOAD_PREPARED_TRAINING_DATA:
     start = time.time()
 
     # load the triplets
-    df_train = pd.read_csv(handout_path + '/train_triplets_test.txt', header=None)
+    df_train = pd.read_csv(handout_path + '/train_triplets.txt', header=None)
     df_test = pd.read_csv(handout_path + '/test_triplets.txt', header=None)
 
     # =======================
     # construct training data
     # =======================
-    # construct header
+    # construct header, A1 A2 ... B1 B2 ... C1 C2 ...
     header = list()
     header.extend(['A_feature'+str(i+1) for i in range(len(df.columns))])
     header.extend(['B_feature'+str(i+1) for i in range(len(df.columns))])
@@ -253,28 +250,33 @@ if not LOAD_PREPARED_TRAINING_DATA:
 
     # add header to dataframe
     df_train_features.columns = header
+    df_train_features.reset_index(drop=True, inplace=True)
     print(df_train_features.head())
 
     # label is 1 if A is closer to B and 0 if A is closer to C
     # pair of rows denotes that A is closer to B (1) and that A is closer to C (0)
-    df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 0, 1), columns=['label'])
+    df_train_labels = pd.DataFrame(np.where(np.arange(2*len(df_train.values)) % 2, 0, 1), columns=['label'])
     print(df_train_labels.head())
 
     # write prepared data to csv file
     df_train_features.to_csv(handout_path + 'train_features.csv', index=False)
-    df_train_labels.to_csv(handout_path + 'train_labels.csv')
+    df_train_labels.to_csv(handout_path + 'train_labels.csv', index=False)
+
+    # TODO: add test to check whether construction is as intended
 
     # ===================
     # construct test data
     # ===================
-    # df_test_features = pd.DataFrame()
-    # for triplet in tqdm(df_test.values):
-    #     triplet = [int(img) for img in triplet[0].split(' ')]
-    #     df_test_features = df_test_features.append(pd.DataFrame(
-    #         np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,
-    #                                                ignore_index=True)
-    # df_test_features.columns = header
-    # df_test_features.to_csv(handout_path + 'test_features.csv', index=False)
+    df_test_features = pd.DataFrame()
+    for triplet in tqdm(df_test.values):
+        triplet = [int(img) for img in triplet[0].split(' ')]
+        df_test_features = df_test_features.append(pd.DataFrame(
+            np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,
+                                                   ignore_index=True)
+    df_test_features.columns = header
+    df_test_features.to_csv(handout_path + 'test_features.csv', index=False)
+
+    # TODO: add test to check whether construction is as intended
 
     print('elapsed time \t', time.time() - start)
 
