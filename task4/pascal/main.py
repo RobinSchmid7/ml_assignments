@@ -134,18 +134,8 @@ def plot_heatmap(data):
     plt.show()
 
 
-# DEPRECATED
-def compute_pandas(df, df_train):
-    df_train_features = pd.DataFrame()
-    for triplet in tqdm(df_train.values):
-        triplet = [int(img) for img in triplet[0].split(' ')]
-
-        # for each triplet, we can construct two possible outputs by switching image B and C
-        # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
-        df_train_features = df_train_features.append(pd.DataFrame(np.vstack((np.hstack(
-            (df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values)), np.hstack(
-            (df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))))))
-    return df_train_features
+def transpose_classes(probaA, probaB, probaC):
+    return np.concatenate(np.array([probaA, probaB, probaC]).T)
 
 
 # TODO
@@ -243,17 +233,21 @@ if not LOAD_PREPARED_TRAINING_DATA:
     start = time.time()
 
     # load the triplets
-    df_train = pd.read_csv(handout_path + '/train_triplets.txt', header=None)
-    df_test = pd.read_csv(handout_path + '/test_triplets.txt', header=None)
+    df_train = pd.read_csv(handout_path + '/train_triplets_test.txt', header=None)
+    df_test = pd.read_csv(handout_path + '/test_triplets_test.txt', header=None)
 
     # get numpy representation for reduced class probabilities
     classes = df.to_numpy()
 
-    # construct header, A1 A2 ... B1 B2 ... C1 C2 ...
+    # construct header
     header = list()
-    header.extend(['A_feature'+str(i+1) for i in range(len(df.columns))])
-    header.extend(['B_feature'+str(i+1) for i in range(len(df.columns))])
-    header.extend(['C_feature'+str(i+1) for i in range(len(df.columns))])
+    # header.extend(['A_feature'+str(i+1) for i in range(len(df.columns))])
+    # header.extend(['B_feature'+str(i+1) for i in range(len(df.columns))])
+    # header.extend(['C_feature'+str(i+1) for i in range(len(df.columns))])
+    for i in range(len(df.columns)):
+        header.append('A_feature'+str(i+1))
+        header.append('B_feature'+str(i+1))
+        header.append('C_feature'+str(i+1))
 
     # =======================
     # construct training data
@@ -267,12 +261,18 @@ if not LOAD_PREPARED_TRAINING_DATA:
 
         # for each triplet, we can construct two possible outputs by switching image B and C
         # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
-        features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
-        features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
-        iter += 2
-    df_train_features = pd.DataFrame(features)
 
-    # add header to dataframe
+        # # ordering A1 A2 A3 ...
+        # features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
+        # features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
+
+        # ordering A1 B1 C1 ...
+        features[iter, :] = transpose_classes(classes[imgs[0]], classes[imgs[1]], classes[imgs[2]])
+        features[iter+1, :] = transpose_classes(classes[imgs[0]], classes[imgs[2]], classes[imgs[1]])
+        iter += 2
+
+    # transform array to pandas dataframe
+    df_train_features = pd.DataFrame(features)
     df_train_features.columns = header
     df_train_features.reset_index(drop=True, inplace=True)
     print(df_train_features.head())
@@ -298,10 +298,11 @@ if not LOAD_PREPARED_TRAINING_DATA:
         imgs = [int(img) for img in triplet[0].split(' ')]
 
         # construct test data
-        features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
+        # features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
+        features[iter, :] = transpose_classes(classes[imgs[0]], classes[imgs[1]], classes[imgs[2]])
         iter += 1
 
-    # create dataframe from test data
+    # transform test data array to pandas dataframe
     df_test_features = pd.DataFrame(features)
     df_test_features.columns = header
     print(df_test_features.head())
