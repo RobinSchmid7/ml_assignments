@@ -16,12 +16,13 @@ from torch.utils.data import Dataset, DataLoader
 import sklearn
 from sklearn.metrics import f1_score
 from sklearn.model_selection import KFold, train_test_split
-from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder,StandardScaler, PowerTransformer
+from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder,StandardScaler, PowerTransformer, LabelBinarizer, LabelEncoder
+
 
 #######################
 EPOCHS = 60
 BATCH_SIZE = 64
-LEARNING_RATE = 0.003
+LEARNING_RATE = 0.002
 #######################
 
 # set random seed
@@ -85,13 +86,13 @@ class binaryClassification(nn.Module):
         )
         self.classifier2 = nn.Sequential(
             nn.Linear(len(X_test_enc[0]), 128),
-            nn.Dropout(p=0.1),
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64,32),
             nn.ReLU(),
-            nn.Linear(32,1),
+            nn.Dropout(p=0.1),
+            nn.Linear(32,1)
         )
 
 
