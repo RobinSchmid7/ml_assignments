@@ -8,6 +8,8 @@ May, 2021
 Version 1.2
 
 Usage: python main.py --eps 100 --bsz 64 --lr 0.002
+
+# TODO: adding more classses only using resnet does hardly improve it, use multiple pretrained networks and only use the most common classes (related to food)...
 """
 
 import numpy as np
