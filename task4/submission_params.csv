@@ -1,3 +1,5 @@
-submission, threshold, learning_rate, batch_size, epochs, scoring
-1,0.2,0.002,64,50,0.58439635152
-2,0.4,0.002,64,50,0.581165225001
+version,submission, threshold, learning_rate, batch_size, epochs, scoring, version comment
+1.0,1,0.2,0.002,64,50,0.58439635152,init
+1.0,2,0.4,0.002,64,50,0.581165225001,init
+1.0,3,0.1,0.002,64,50,0.579482346606,init
+1.1,4,0.2,0.002,64,50,0.582174952038,added linear/Relu layer

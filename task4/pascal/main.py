@@ -5,7 +5,7 @@ Team Naiveoutliers
 Robin Schmid, Pascal Mueller, Marvin Harms
 May, 2021
 
-Version 1.0
+Version 1.1
 """
 
 import numpy as np
@@ -17,9 +17,6 @@ import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
-
-# improve pandas
-import numba
 
 # example of using a pre-trained model as a classifier
 from keras.preprocessing.image import load_img
@@ -40,18 +37,19 @@ from sklearn.model_selection import KFold, train_test_split
 
 # better save than sorry
 import ssl
-
 ssl._create_default_https_context = ssl._create_unverified_context
 
-#######################
+# DATA LOADING
 LOAD_PREPROCESSED = True
 LOAD_PREPARED_TRAINING_DATA = False
-THRESHOLD_STD = 0.1
+THRESHOLD_STD = 0.2
+
+# HYPERPARAMETERS
 LEARNING_RATE = 0.002
 BATCHSIZE = 64
 EPOCHS = 50
-#######################
 
+# PATHS
 HANDOUT_PATH = "../handout/"
 
 # set random seed
@@ -105,7 +103,6 @@ class TestData(Dataset):
         return len(self.X_data)
 
 
-# Architecture
 class BinaryClassification(nn.Module):
     """ Class to define NN architecture. """
 
@@ -114,8 +111,8 @@ class BinaryClassification(nn.Module):
         self.classifier1 = nn.Sequential(
             nn.Linear(len(X_train[0]), 256),
             nn.ReLU(),
-            # nn.Linear(256, 256),
-            # nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
             nn.Linear(256, 64),
             nn.ReLU(),
             nn.Dropout(p=0.1),
@@ -135,7 +132,7 @@ class BinaryClassification(nn.Module):
         )
 
     def forward(self, inputs):
-        return self.classifier2(inputs)
+        return self.classifier1(inputs)
 
 
 def load_images(model, df):
