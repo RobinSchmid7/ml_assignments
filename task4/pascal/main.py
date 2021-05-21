@@ -35,10 +35,12 @@ from sklearn.model_selection import KFold, train_test_split
 
 # better save than sorry
 import ssl
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 #######################
 LOAD_PREPROCESSED = True
+LOAD_REDUCED = True
 LOAD_PREPARED_TRAINING_DATA = False
 LEARNING_RATE = 0.0002
 BATCHSIZE = 64
@@ -129,6 +131,7 @@ def plot_heatmap(data):
     sns.heatmap(data)
     plt.show()
 
+
 # =======================================================================================
 # IDEA: PREDICT CLASS LABELS FOR EACH IMAGE INDEPENDENTLY.
 # THEN, WE SAVE THE 1000-DIM OUTPUT VECTOR OF EACH IMAGE AS A NEW FEATURE VECTOR.
@@ -138,18 +141,19 @@ def plot_heatmap(data):
 
 handout_path = "../handout/"
 
+# =============
+# PREPROCESSING
+# =============
 if not LOAD_PREPROCESSED:
-    # ===========
+    print('Preprocessing images...')
+
     # setup model
-    # ===========
     # we use the pretrained model
     model = tf.keras.Sequential()
     model = ResNet50(include_top=True)
     model.summary()
 
-    # =====================================
     # predict image classes (preprocessing)
-    # =====================================
     start = time.time()
     header = []
     for i in range(1000):
@@ -178,102 +182,107 @@ if not LOAD_PREPROCESSED:
     df.to_csv(handout_path + 'class_probabilities.csv')
     print('elapsed time \t', time.time() - start)
 
-else:
-    # ========================
+# ===============
+# CLASS REDUCTION
+# ===============
+elif LOAD_PREPROCESSED and not LOAD_REDUCED:
+    print('Reduce classes...')
+    start = time.time()
+
     # load preprocessed images
-    # ========================
     df = pd.read_csv(handout_path + 'class_probabilities.csv', index_col=0)
 
-# ========================
-# find most common classes
-# ========================
-start = time.time()
+    # heat map of class probabilities
+    plot_heatmap(df)
 
-# heat map of class probabilities
-plot_heatmap(df)
+    # only use classes which are more present a certain threshold in images
+    class_mean = df.mean(axis=0)
+    threshold = class_mean.mean() + 0.2 * class_mean.std()  # TODO: tune this
+    reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
+    print(len(reduced_classes))
 
-# only use classes which are more present a certain threshold in images
-class_mean = df.mean(axis=0)
-threshold = class_mean.mean() + 0.2 * class_mean.std()  # TODO: tune this
-reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-print(len(reduced_classes))
+    # prepare data frame with reduced classes
+    df_reduced = df.iloc[:, reduced_classes]
+    df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
+    plot_heatmap(df_reduced)
+    df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
 
-# prepare data frame with reduced classes
-df_reduced = df.iloc[:, reduced_classes]
-df_reduced.columns = ['class'+str(i+1) for i in range(len(reduced_classes))]
-plot_heatmap(df_reduced)
-df_reduced.to_csv(handout_path + 'reduced_class_probabilities.csv')
+    # clean up
+    df = df_reduced
 
-# clean up
-df = df_reduced
+    print('elapsed time \t', time.time() - start)
 
-print('elapsed time \t', time.time() - start)
+# load preprocessed and reduced image classes
+else:
+    print('Load reduced classes...')
+    # load reduced class probabilities
+    df = pd.read_csv(handout_path + 'reduced_class_probabilities.csv', index_col=0)
+    print('...done')
 
-# ====================
-# prepare triplet data
-# ====================
-# if not LOAD_PREPARED_TRAINING_DATA:
-#     start = time.time()
-#     # load the triplets
-#     df_train = pd.read_csv(handout_path + '/train_triplets_test.txt')
-#     df_test = pd.read_csv(handout_path + '/test_triplets.txt')
-#
-#     # =======================
-#     # construct training data
-#     # =======================
-#     # construct header
-#     # TODO: make faster
-#     header = []
-#     for i in range(len(df.columns)):
-#         header.append('A_feature' + str(i + 1))
-#         header.append('B_feature' + str(i + 1))
-#         header.append('C_feature' + str(i + 1))
-#
-#     # assign for each triplet its probability to each of the main classes
-#     df_train_features = pd.DataFrame()
-#     for triplet in tqdm(df_train.values):
-#         triplet = [int(img) for img in triplet[0].split(' ')]
-#
-#         print(triplet)
-#
-#         # for each triplet, we can construct two possible outputs by switching image B and C
-#         # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
-#         df_train_features = df_train_features.append(pd.DataFrame(np.vstack((np.hstack(
-#             (df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values)), np.hstack(
-#             (df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))))))
-#
-#     # add header to dataframe
-#     df_train_features.columns = header
-#     print(df_train_features.head())
-#
-#     # label is 1 if A is closer to B and 0 if A is closer to C
-#     # pair of rows denotes that A is closer to B (1) and that A is closer to C (0)
-#     df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 0, 1), columns=['label'])
-#     print(df_train_labels.head())
-#
-#     # write prepared data to csv file
-#     df_train_features.to_csv(handout_path + 'train_features.csv', index=False)
-#     df_train_labels.to_csv(handout_path + 'train_labels.csv', index=False)
-#
-#     # ===================
-#     # construct test data
-#     # ===================
-#     # df_test_features = pd.DataFrame()
-#     # for triplet in tqdm(df_test.values):
-#     #     triplet = [int(img) for img in triplet[0].split(' ')]
-#     #     df_test_features = df_test_features.append(pd.DataFrame(
-#     #         np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,
-#     #                                                ignore_index=True)
-#     # df_test_features.columns = header
-#     # df_test_features.to_csv(handout_path + 'test_features.csv', index=False)
-#
-#     print('elapsed time \t', time.time() - start)
-#
-# else:
-#     # load constructed data
-#     df_train_features = pd.read_csv(handout_path + 'train_features.csv')
-#     df_train_labels = pd.read_csv(handout_path + 'train_labels.csv')
-#     df_test_features = pd.read_csv(handout_path + 'test_features.csv')
+
+# ================
+# PREPARE TRIPLETS
+# ================
+if not LOAD_PREPARED_TRAINING_DATA:
+    print('Prepare training data...')
+    start = time.time()
+
+    # load the triplets
+    df_train = pd.read_csv(handout_path + '/train_triplets_test.txt', header=None)
+    df_test = pd.read_csv(handout_path + '/test_triplets.txt', header=None)
+
+    # =======================
+    # construct training data
+    # =======================
+    # construct header
+    header = list()
+    header.extend(['A_feature'+str(i+1) for i in range(len(df.columns))])
+    header.extend(['B_feature'+str(i+1) for i in range(len(df.columns))])
+    header.extend(['C_feature'+str(i+1) for i in range(len(df.columns))])
+
+    # assign for each triplet its probability to each of the main classes
+    df_train_features = pd.DataFrame()
+    for triplet in tqdm(df_train.values):
+        triplet = [int(img) for img in triplet[0].split(' ')]
+
+        # for each triplet, we can construct two possible outputs by switching image B and C
+        # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
+        df_train_features = df_train_features.append(pd.DataFrame(np.vstack((np.hstack(
+            (df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values)), np.hstack(
+            (df.loc[triplet[0]].values, df.loc[triplet[2]].values, df.loc[triplet[1]].values))))))
+
+    # add header to dataframe
+    df_train_features.columns = header
+    print(df_train_features.head())
+
+    # label is 1 if A is closer to B and 0 if A is closer to C
+    # pair of rows denotes that A is closer to B (1) and that A is closer to C (0)
+    df_train_labels = pd.DataFrame(np.where(np.arange(len(df_train.values)) % 2, 0, 1), columns=['label'])
+    print(df_train_labels.head())
+
+    # write prepared data to csv file
+    df_train_features.to_csv(handout_path + 'train_features.csv', index=False)
+    df_train_labels.to_csv(handout_path + 'train_labels.csv')
+
+    # ===================
+    # construct test data
+    # ===================
+    # df_test_features = pd.DataFrame()
+    # for triplet in tqdm(df_test.values):
+    #     triplet = [int(img) for img in triplet[0].split(' ')]
+    #     df_test_features = df_test_features.append(pd.DataFrame(
+    #         np.hstack((df.loc[triplet[0]].values, df.loc[triplet[1]].values, df.loc[triplet[2]].values))).T,
+    #                                                ignore_index=True)
+    # df_test_features.columns = header
+    # df_test_features.to_csv(handout_path + 'test_features.csv', index=False)
+
+    print('elapsed time \t', time.time() - start)
+
+else:
+    # load constructed data
+    df_train_features = pd.read_csv(handout_path + 'train_features.csv')
+    df_train_labels = pd.read_csv(handout_path + 'train_labels.csv')
+    df_test_features = pd.read_csv(handout_path + 'test_features.csv')
 
 # ====================
 # create NN classifier
