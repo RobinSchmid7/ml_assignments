@@ -43,11 +43,11 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 #######################
 LOAD_PREPROCESSED = True
-LOAD_PREPARED_TRAINING_DATA = True
+LOAD_PREPARED_TRAINING_DATA = False
 THRESHOLD_STD = 0.2
-LEARNING_RATE = 0.0002
+LEARNING_RATE = 0.002
 BATCHSIZE = 64
-EPOCHS = 10
+EPOCHS = 50
 #######################
 
 HANDOUT_PATH = "../handout/"
@@ -275,10 +275,10 @@ if __name__ == '__main__':
 
         print('elapsed time \t', time.time() - start)
 
-    # else:
-    #     print('Loading class probabilities...')
-    #     # load preprocessed images
-    #     df_images = pd.read_csv(HANDOUT_PATH + 'class_probabilities.csv', index_col=0)
+    else:
+        print('Loading class probabilities...')
+        # load preprocessed images
+        df_images = pd.read_csv(HANDOUT_PATH + 'class_probabilities.csv', index_col=0)
 
     # ================
     # PREPARE TRIPLETS
@@ -304,7 +304,6 @@ if __name__ == '__main__':
         plot_heatmap(df_reduced)
         df_reduced.to_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv')
 
-        print('...writing reduced class probabilities')
         df_reduced = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv', index_col=0)
 
         print('Prepare training data...')
@@ -368,6 +367,7 @@ if __name__ == '__main__':
     y_train = df_train_labels.values
     X_test = df_test_features.values
 
+    # define model, loss and optimizer
     model = BinaryClassification()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -380,6 +380,7 @@ if __name__ == '__main__':
     model.train()
     train_results = {}
     test_results = {}
+    print('Running training loop...')
 
     # iterate over all epochs
     for epoch in tqdm(range(1, EPOCHS + 1)):
@@ -393,7 +394,6 @@ if __name__ == '__main__':
 
         # iterate over training mini-batches
         for i, data, in enumerate(train_loader, 1):
-
             # accounting
             end = time.time()
             features, labels = data
@@ -408,7 +408,7 @@ if __name__ == '__main__':
             prediction = model(features)
 
             # compute the loss
-            loss = criterion(prediction, labels.unsqueeze(1))
+            loss = criterion(prediction, labels)
 
             # backward propagation
             loss.backward()
@@ -417,13 +417,16 @@ if __name__ == '__main__':
             optimizer.step()
 
             # accounting
-            acc = accuracy_score(torch.round(prediction), labels.unsqueeze(1))
+            acc = accuracy_score(torch.round(prediction).detach().numpy(), labels)
             loss_.update(loss.mean().item(), bs)
             acc_.update(acc.item(), bs)
             time_.update(time.time() - end)
 
-        print(f'Epoch {epoch}. [Train] \t Time {time_.sum:.2f} \t Loss {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
+        print(f'\n Epoch {epoch}. [Train] \t Time {time_.sum:.2f} \t Loss {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
         train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
+
+        # nice print to console
+        time.sleep(0.1)
 
     # plot training process
     training = list()
@@ -445,6 +448,7 @@ if __name__ == '__main__':
     # ===================
     # run prediction loop
     # ===================
+    print('Classify test images...')
     test_data = TestData(torch.FloatTensor(X_test))
     test_loader = DataLoader(dataset=test_data, batch_size=BATCHSIZE, shuffle=False)
     y_pred_list = []
