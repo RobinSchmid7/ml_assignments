@@ -55,10 +55,10 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # DATA LOADING
-LOAD_PREPROCESSED = False
-LOAD_REDUCED_TRAINING_DATA = False
+LOAD_PREPROCESSED = True
+LOAD_REDUCED_TRAINING_DATA = True
 LOAD_PREPARED_TRAINING_DATA = True
-THRESHOLD_STD = 0.02
+THRESHOLD_STD = 2
 
 # HYPERPARAMETERS
 LEARNING_RATE = 0.002
@@ -264,12 +264,13 @@ def prepare_training_features(df_red, df_features):
         # A1_resnet B1_resnet C1_resnet A1_vgg B1_vgg C1_vgg A1_xception B1_xception C1_xception
         # A2_resnet B2_resnet C2_resnet A2_vgg C2_vgg B2_vgg A1_xception C1_xception B1_xception
         # ...
-        features[2*i, :] = np.concatenate(class_proba1[imgs[0]], class_proba1[imgs[1]], class_proba1[imgs[2]],
+
+        features[2*i, :] = np.concatenate((class_proba1[imgs[0]], class_proba1[imgs[1]], class_proba1[imgs[2]],
                                              class_proba2[imgs[0]], class_proba2[imgs[1]], class_proba2[imgs[2]],
-                                             class_proba3[imgs[0]], class_proba3[imgs[1]], class_proba3[imgs[2]])
-        features[2*i+1, :] = np.concatenate(class_proba1[imgs[0]], class_proba1[imgs[2]], class_proba1[imgs[1]],
+                                             class_proba3[imgs[0]], class_proba3[imgs[1]], class_proba3[imgs[2]]))
+        features[2*i+1, :] = np.concatenate((class_proba1[imgs[0]], class_proba1[imgs[2]], class_proba1[imgs[1]],
                                              class_proba2[imgs[0]], class_proba2[imgs[2]], class_proba2[imgs[1]],
-                                             class_proba3[imgs[0]], class_proba3[imgs[2]], class_proba3[imgs[1]])
+                                             class_proba3[imgs[0]], class_proba3[imgs[2]], class_proba3[imgs[1]]))
 
     return pd.DataFrame(features)
 
@@ -301,10 +302,12 @@ def prepare_test_features(df_red, df_features):
         # features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
         # features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
 
-        # ordering A1 B1 C1 ...
-        features[i, :] = np.concatenate(class_proba1[imgs[0]], class_proba1[imgs[1]], class_proba1[imgs[2]],
-                                               class_proba2[imgs[0]], class_proba2[imgs[1]], class_proba2[imgs[2]],
-                                               class_proba3[imgs[0]], class_proba3[imgs[1]], class_proba3[imgs[2]])
+        # ordering:
+        # A1_resnet B1_resnet C1_resnet A1_vgg B1_vgg C1_vgg A1_xception B1_xception C1_xception
+        # ...
+        features[i, :] = np.concatenate((class_proba1[imgs[0]], class_proba1[imgs[1]], class_proba1[imgs[2]],
+                                           class_proba2[imgs[0]], class_proba2[imgs[1]], class_proba2[imgs[2]],
+                                           class_proba3[imgs[0]], class_proba3[imgs[1]], class_proba3[imgs[2]]))
 
     return pd.DataFrame(features)
 
@@ -347,15 +350,15 @@ if __name__ == '__main__':
         print('Preprocessing images...')
 
         # setup pretrained models
-        model_resnet = tf.keras.Sequential()
+        # model_resnet = tf.keras.Sequential()
         model_resnet = ResNet50(include_top=True)
         model_resnet.summary()
 
-        model_vgg = tf.keras.Sequential()
+        # model_vgg = tf.keras.Sequential()
         model_vgg = VGG16(include_top=True)
         model_vgg.summary()
 
-        model_xception = tf.keras.Sequential()
+        # model_xception = tf.keras.Sequential()
         model_xception = Xception(include_top=True)
         model_xception.summary()
 
@@ -406,7 +409,7 @@ if __name__ == '__main__':
             class_mean = df_img.mean(axis=0)
             threshold = class_mean.mean() + THRESHOLD_STD * class_mean.std()  # TODO: tune this
             reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-            print(len(reduced_classes))
+            print('Number of classes in model %i: ' % (i+1) + str(len(reduced_classes)))
 
             # prepare data frame with reduced classes
             df_reduced = df_img.iloc[:, reduced_classes]
@@ -420,6 +423,7 @@ if __name__ == '__main__':
         df_red = [df_reduced_resnet, df_reduced_vgg, df_reduced_xception]
 
     else:
+        print('Loading reduced class probabilities...')
         df_reduced_resnet = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities0.csv', index_col=0)
         df_reduced_vgg = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities1.csv', index_col=0)
         df_reduced_xception = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities2.csv', index_col=0)
@@ -476,12 +480,12 @@ if __name__ == '__main__':
 
             # TODO: add test to check whether construction is as intended
 
-        else:
-            print('Loading training and test set...')
-            # load constructed data
-            df_train_features = pd.read_csv(HANDOUT_PATH + 'train_features.csv')
-            df_train_labels = pd.read_csv(HANDOUT_PATH + 'train_labels.csv')
-            df_test_features = pd.read_csv(HANDOUT_PATH + 'test_features.csv')
+    else:
+        print('Loading training and test set...')
+        # load constructed data
+        df_train_features = pd.read_csv(HANDOUT_PATH + 'train_features.csv')
+        df_train_labels = pd.read_csv(HANDOUT_PATH + 'train_labels.csv')
+        df_test_features = pd.read_csv(HANDOUT_PATH + 'test_features.csv')
 
     # ====================
     # CREATE NN CLASSIFIER
