@@ -14,8 +14,8 @@ Usage: python main.py --eps 100 --bsz 64 --lr 0.002
 
 import numpy as np
 import pandas as pd
-# import tensorflow as tf
-# import keras
+import tensorflow as tf
+import keras
 import os
 import time
 import matplotlib.pyplot as plt
@@ -24,11 +24,20 @@ import seaborn as sns
 import argparse
 
 # example of using a pre-trained model as a classifier
-# from keras.preprocessing.image import load_img
-# from keras.preprocessing.image import img_to_array
-# from keras.applications.vgg16 import preprocess_input
-# from keras.applications.resnet50 import decode_predictions
-# from keras.applications.resnet50 import ResNet50
+from keras.preprocessing.image import load_img
+from keras.preprocessing.image import img_to_array
+
+from keras.applications.resnet50 import decode_predictions as resnet_decode_predictions
+from keras.applications.resnet50 import preprocess_input as resnet_preprocess_input
+from keras.applications.resnet50 import ResNet50
+
+from keras.applications.vgg16 import VGG16
+from keras.applications.vgg16 import decode_predictions as vgg_decode_predictions
+from keras.applications.vgg16 import preprocess_input as vgg_preprocess_input
+
+from keras.applications.xception import Xception
+from keras.applications.xception import decode_predictions as xception_decode_predictions
+from keras.applications.xception import preprocess_input as xception_preprocess_input
 
 # pytorch
 import torch
@@ -46,7 +55,8 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # DATA LOADING
-LOAD_PREPROCESSED = True
+LOAD_PREPROCESSED = False
+LOAD_REDUCED_TRAINING_DATA = False
 LOAD_PREPARED_TRAINING_DATA = True
 THRESHOLD_STD = 0.02
 
@@ -124,49 +134,92 @@ class BinaryClassification(nn.Module):
             nn.Linear(256, 1),
             nn.Sigmoid()
         )
-        self.classifier2 = nn.Sequential(
-            nn.Linear(len(X_train[0]), 256),
-            nn.ReLU(),
-            # nn.Linear(256, 256),
-            # nn.ReLU(),
-            nn.Linear(256, 64),
-            nn.ReLU(),
-            nn.Dropout(p=0.1),
-            nn.Linear(64, 1),
-            nn.Sigmoid()
-        )
 
     def forward(self, inputs):
         return self.classifier1(inputs)
 
 
-# def load_images(model, df):
-#     imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
-#     for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
-#         if filename.endswith('.jpg'):
-#             print('\n' + filename)
-#             image = get_image(filename)
-#             # reshape data for the model
-#             image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
-#             # prepare the image for the model
-#             image = preprocess_input(image)
-#             # predict the probability across all output classes
-#             yhat = model.predict(image)
-#             # retrieve the most likely result, e.g. highest probability
-#             label = decode_predictions(yhat)
-#             # retrieve the most likely result, e.g. highest probability
-#             label = label[0][0]
-#             print('%s (%.2f%%)' % (label[1], label[2] * 100))
-#             # append the probabilities to dataframe
-#             df.loc[filename[0:-4]] = yhat[0][:]
-#     return df
+def load_images_resnet(model, df):
+    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
+    for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
+        if filename.endswith('.jpg'):
+            print('\n' + filename)
+            image = get_image_resnet(filename)
+            # reshape data for the model
+            image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+            # prepare the image for the model
+            image = resnet_preprocess_input(image)
+            # predict the probability across all output classes
+            yhat = model.predict(image)
+            # retrieve the most likely result, e.g. highest probability
+            label = resnet_decode_predictions(yhat)
+            # retrieve the most likely result, e.g. highest probability
+            label = label[0][0]
+            print('%s (%.2f%%)' % (label[1], label[2] * 100))
+            # append the probabilities to dataframe
+            df.loc[filename[0:-4]] = yhat[0][:]
+    return df
+
+def load_images_vgg(model, df):
+    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
+    for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
+        if filename.endswith('.jpg'):
+            print('\n' + filename)
+            image = get_image_vgg(filename)
+            # reshape data for the model
+            image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+            # prepare the image for the model
+            image = vgg_preprocess_input(image)
+            # predict the probability across all output classes
+            yhat = model.predict(image)
+            # retrieve the most likely result, e.g. highest probability
+            label = vgg_decode_predictions(yhat)
+            # retrieve the most likely result, e.g. highest probability
+            label = label[0][0]
+            print('%s (%.2f%%)' % (label[1], label[2] * 100))
+            # append the probabilities to dataframe
+            df.loc[filename[0:-4]] = yhat[0][:]
+    return df
+
+def load_images_xception(model, df):
+    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
+    for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
+        if filename.endswith('.jpg'):
+            print('\n' + filename)
+            image = get_image_xception(filename)
+            # reshape data for the model
+            image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+            # prepare the image for the model
+            image = xception_preprocess_input(image)
+            # predict the probability across all output classes
+            yhat = model.predict(image)
+            # retrieve the most likely result, e.g. highest probability
+            label = xception_decode_predictions(yhat)
+            # retrieve the most likely result, e.g. highest probability
+            label = label[0][0]
+            print('%s (%.2f%%)' % (label[1], label[2] * 100))
+            # append the probabilities to dataframe
+            df.loc[filename[0:-4]] = yhat[0][:]
+    return df
 
 
-# def get_image(filename):
-#     global HANDOUT_PATH
-#     img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(224, 224))
-#     img = img_to_array(img)
-#     return img
+def get_image_resnet(filename):
+    global HANDOUT_PATH
+    img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(224, 224))
+    img = img_to_array(img)
+    return img
+
+def get_image_vgg(filename):
+    global HANDOUT_PATH
+    img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(224, 224))
+    img = img_to_array(img)
+    return img
+
+def get_image_xception(filename):
+    global HANDOUT_PATH
+    img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(299, 299))
+    img = img_to_array(img)
+    return img
 
 
 def plot_heatmap(data):
@@ -174,7 +227,7 @@ def plot_heatmap(data):
     plt.show()
 
 
-def prepare_training_features(class_proba, df_features):
+def prepare_training_features(df_red, df_features):
     """ Modifies the train triplets such that image is assigned a
     probability to belong to a class.
 
@@ -190,8 +243,53 @@ def prepare_training_features(class_proba, df_features):
         triplet 1: A1 B1 C1 ...
         triplet 1: A1 C1 B1 ...
     """
+    class_proba1 = df_red[0].to_numpy()
+    class_proba2 = df_red[1].to_numpy()
+    class_proba3 = df_red[2].to_numpy()
+
     # assign for each triplet its probability to each of the main classes
-    features = np.ndarray(shape=(2 * len(df_features), 3 * len(class_proba[0])))
+    features = np.ndarray(shape=(2 * len(df_features), 3 * (len(class_proba1[0]) + len(class_proba2[0]) + len(class_proba3[0]))))
+    for i, triplet in enumerate(tqdm(df_train.to_numpy())):
+        # get image ids per triple
+        imgs = [int(img) for img in triplet[0].split(' ')]
+
+        # for each triplet, we can construct two possible outputs by switching image B and C
+        # pair of rows denotes that A it closer to B (1) and that A is closer to C (0)
+
+        # # ordering A1 A2 A3 ...
+        # features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
+        # features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
+
+        # ordering:
+        # A1_resnet B1_resnet C1_resnet A1_vgg B1_vgg C1_vgg A1_xception B1_xception C1_xception
+        # A2_resnet B2_resnet C2_resnet A2_vgg C2_vgg B2_vgg A1_xception C1_xception B1_xception
+        # ...
+        features[2*i, :] = np.concatenate(class_proba1[imgs[0]], class_proba1[imgs[1]], class_proba1[imgs[2]],
+                                             class_proba2[imgs[0]], class_proba2[imgs[1]], class_proba2[imgs[2]],
+                                             class_proba3[imgs[0]], class_proba3[imgs[1]], class_proba3[imgs[2]])
+        features[2*i+1, :] = np.concatenate(class_proba1[imgs[0]], class_proba1[imgs[2]], class_proba1[imgs[1]],
+                                             class_proba2[imgs[0]], class_proba2[imgs[2]], class_proba2[imgs[1]],
+                                             class_proba3[imgs[0]], class_proba3[imgs[2]], class_proba3[imgs[1]])
+
+    return pd.DataFrame(features)
+
+
+def prepare_test_features(df_red, df_features):
+    """ Modifies the test triplets such that each image is assigned a
+    probability to belong to a class.
+
+    Returns a data frame of size (triplets, 3 x classes). The ordering for each
+    triplet is:
+        triplet 0: A1 B1 C1 ...
+        triplet 1: A1 B1 C1 ...
+    """
+    class_proba1 = df_red[0].to_numpy()
+    class_proba2 = df_red[1].to_numpy()
+    class_proba3 = df_red[2].to_numpy()
+
+    # assign for each triplet its probability to each of the main classes
+    features = np.ndarray(
+        shape=(2 * len(df_features), 3 * (len(class_proba1[0]) + len(class_proba2[0]) + len(class_proba3[0]))))
     for i, triplet in enumerate(tqdm(df_train.to_numpy())):
         # get image ids per triple
         imgs = [int(img) for img in triplet[0].split(' ')]
@@ -204,29 +302,9 @@ def prepare_training_features(class_proba, df_features):
         # features[iter + 1, :] = np.concatenate(classes[[imgs[0], imgs[2], imgs[1]]])
 
         # ordering A1 B1 C1 ...
-        features[2*i, :] = transpose_classes(class_proba[imgs[0]], class_proba[imgs[1]], class_proba[imgs[2]])
-        features[2*i+1, :] = transpose_classes(class_proba[imgs[0]], class_proba[imgs[2]], class_proba[imgs[1]])
-
-    return pd.DataFrame(features)
-
-
-def prepare_test_features(class_proba, df_features):
-    """ Modifies the test triplets such that each image is assigned a
-    probability to belong to a class.
-
-    Returns a data frame of size (triplets, 3 x classes). The ordering for each
-    triplet is:
-        triplet 0: A1 B1 C1 ...
-        triplet 1: A1 B1 C1 ...
-    """
-    features = np.ndarray(shape=(len(df_features), 3 * len(class_proba[0])))
-    for i, triplet in enumerate(tqdm(df_features.to_numpy())):
-        # get image ids per triple
-        imgs = [int(img) for img in triplet[0].split(' ')]
-
-        # construct test data
-        # features[iter, :] = np.concatenate(classes[[imgs[0], imgs[1], imgs[2]]])
-        features[i, :] = transpose_classes(class_proba[imgs[0]], class_proba[imgs[1]], class_proba[imgs[2]])
+        features[i, :] = np.concatenate(class_proba1[imgs[0]], class_proba1[imgs[1]], class_proba1[imgs[2]],
+                                               class_proba2[imgs[0]], class_proba2[imgs[1]], class_proba2[imgs[2]],
+                                               class_proba3[imgs[0]], class_proba3[imgs[1]], class_proba3[imgs[2]])
 
     return pd.DataFrame(features)
 
@@ -267,109 +345,143 @@ if __name__ == '__main__':
     # =============
     if not LOAD_PREPROCESSED:
         print('Preprocessing images...')
-        #
-        # # setup model
-        # # we use the pretrained model
-        # model = tf.keras.Sequential()
-        # model = ResNet50(include_top=True)
-        # model.summary()
-        #
-        # # predict image classes (preprocessing)
-        # start = time.time()
-        # header = []
-        # for i in range(1000):
-        #     header.append('class' + str(i + 1))
-        #
-        # df_images = pd.DataFrame(columns=header)
-        # df_images = load_images(model, df_images)
-        #
-        # print('...writing class probabilities')
-        # df_images.to_csv(HANDOUT_PATH + 'class_probabilities.csv')
-        #
-        # print('elapsed time \t', time.time() - start)
+
+        # setup pretrained models
+        model_resnet = tf.keras.Sequential()
+        model_resnet = ResNet50(include_top=True)
+        model_resnet.summary()
+
+        model_vgg = tf.keras.Sequential()
+        model_vgg = VGG16(include_top=True)
+        model_vgg.summary()
+
+        model_xception = tf.keras.Sequential()
+        model_xception = Xception(include_top=True)
+        model_xception.summary()
+
+        # predict image classes (preprocessing)
+        start = time.time()
+        header = []
+        for i in range(1000):
+            header.append('class' + str(i + 1))
+
+        df_images_resnet = pd.DataFrame(columns=header)
+        df_images_vgg = pd.DataFrame(columns=header)
+        df_images_xception = pd.DataFrame(columns=header)
+
+        df_images_resnet = load_images_resnet(model_resnet, df_images_resnet)
+        df_images_vgg = load_images_vgg(model_vgg, df_images_vgg)
+        df_images_xception = load_images_xception(model_xception, df_images_xception)
+
+        print('...writing class probabilities')
+        df_images_resnet.to_csv(HANDOUT_PATH + 'class_probabilities_resnet.csv')
+        df_images_vgg.to_csv(HANDOUT_PATH + 'class_probabilities_vgg.csv')
+        df_images_xception.to_csv(HANDOUT_PATH + 'class_probabilities_xception.csv')
+        df_images = [df_images_resnet, df_images_vgg, df_images_xception]
+
+        print('elapsed time \t', time.time() - start)
 
     else:
         print('Loading class probabilities...')
         # load preprocessed images
-        df_images = pd.read_csv(HANDOUT_PATH + 'class_probabilities.csv', index_col=0)
+        df_images_resnet = pd.read_csv(HANDOUT_PATH + 'class_probabilities_resnet.csv', index_col=0)
+        df_images_vgg = pd.read_csv(HANDOUT_PATH + 'class_probabilities_vgg.csv', index_col=0)
+        df_images_xception = pd.read_csv(HANDOUT_PATH + 'class_probabilities_xception.csv', index_col=0)
+        df_images = [df_images_resnet, df_images_vgg, df_images_xception]
+
+    # ==============
+    # REDUCE CLASSES
+    # ==============
+    if not LOAD_REDUCED_TRAINING_DATA:
+        for i, df_img in enumerate(tqdm(df_images)):
+            # ===============
+            # CLASS REDUCTION
+            # ===============
+            print('Reduce classes...')
+
+            # heat map of class probabilities
+            plot_heatmap(df_img)
+
+            # only use classes which are more present than a certain threshold in images
+            class_mean = df_img.mean(axis=0)
+            threshold = class_mean.mean() + THRESHOLD_STD * class_mean.std()  # TODO: tune this
+            reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
+            print(len(reduced_classes))
+
+            # prepare data frame with reduced classes
+            df_reduced = df_img.iloc[:, reduced_classes]
+            df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
+            plot_heatmap(df_reduced)
+            df_reduced.to_csv(HANDOUT_PATH + 'reduced_class_probabilities%i.csv' % i)
+
+        df_reduced_resnet = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities0.csv', index_col=0)
+        df_reduced_vgg = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities1.csv', index_col=0)
+        df_reduced_xception = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities2.csv', index_col=0)
+        df_red = [df_reduced_resnet, df_reduced_vgg, df_reduced_xception]
+
+    else:
+        df_reduced_resnet = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities0.csv', index_col=0)
+        df_reduced_vgg = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities1.csv', index_col=0)
+        df_reduced_xception = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities2.csv', index_col=0)
+        df_red = [df_reduced_resnet, df_reduced_vgg, df_reduced_xception]
 
     # ================
     # PREPARE TRIPLETS
     # ================
     if not LOAD_PREPARED_TRAINING_DATA:
-        # ===============
-        # CLASS REDUCTION
-        # ===============
-        print('Reduce classes...')
 
-        # heat map of class probabilities
-        plot_heatmap(df_images)
+            print('Prepare training data...')
+            start = time.time()
 
-        # only use classes which are more present than a certain threshold in images
-        class_mean = df_images.mean(axis=0)
-        threshold = class_mean.mean() + THRESHOLD_STD * class_mean.std()  # TODO: tune this
-        reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-        print(len(reduced_classes))
+            # load the triplets
+            df_train = pd.read_csv(HANDOUT_PATH + '/train_triplets.txt', header=None)
+            df_test = pd.read_csv(HANDOUT_PATH + '/test_triplets.txt', header=None)
 
-        # prepare data frame with reduced classes
-        df_reduced = df_images.iloc[:, reduced_classes]
-        df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
-        plot_heatmap(df_reduced)
-        df_reduced.to_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv')
+            # get numpy representation for reduced class probabilities
+            # classes = df_reduced.to_numpy()
 
-        df_reduced = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv', index_col=0)
+            # construct header
+            header = list()
+            # header.extend(['A_class'+str(i+1) for i in range(len(df.columns))])
+            # header.extend(['B_class'+str(i+1) for i in range(len(df.columns))])
+            # header.extend(['C_class'+str(i+1) for i in range(len(df.columns))])
+            for i in range(len(df_red)):
+                for j in range(len(df_red[i].columns)):
+                    header.append('A_class'+str(j+1))
+                    header.append('B_class'+str(j+1))
+                    header.append('C_class'+str(j+1))
 
-        print('Prepare training data...')
-        start = time.time()
+            # construct training features
+            df_train_features = prepare_training_features(df_red, df_train)
+            df_train_features.columns = header
+            df_train_features.reset_index(drop=True, inplace=True)
+            print(df_train_features.head())
 
-        # load the triplets
-        df_train = pd.read_csv(HANDOUT_PATH + '/train_triplets.txt', header=None)
-        df_test = pd.read_csv(HANDOUT_PATH + '/test_triplets.txt', header=None)
+            # construct training labels
+            # pair of rows denotes that A is closer to B (1) and that A is closer to C (0)
+            df_train_labels = pd.DataFrame(np.where(np.arange(2*len(df_train.values)) % 2, 0, 1), columns=['label'])
+            print(df_train_labels.head())
 
-        # get numpy representation for reduced class probabilities
-        classes = df_reduced.to_numpy()
+            # construct test features
+            df_test_features = prepare_test_features(df_red, df_test)
+            df_test_features.columns = header
+            print(df_test_features.head())
 
-        # construct header
-        header = list()
-        # header.extend(['A_class'+str(i+1) for i in range(len(df.columns))])
-        # header.extend(['B_class'+str(i+1) for i in range(len(df.columns))])
-        # header.extend(['C_class'+str(i+1) for i in range(len(df.columns))])
-        for i in range(len(df_reduced.columns)):
-            header.append('A_class'+str(i+1))
-            header.append('B_class'+str(i+1))
-            header.append('C_class'+str(i+1))
+            # write prepared data to csv file
+            df_train_features.to_csv(HANDOUT_PATH + 'train_features.csv', index=False)
+            df_train_labels.to_csv(HANDOUT_PATH + 'train_labels.csv', index=False)
+            df_test_features.to_csv(HANDOUT_PATH + 'test_features.csv', index=False)
 
-        # construct training features
-        df_train_features = prepare_training_features(classes, df_train)
-        df_train_features.columns = header
-        df_train_features.reset_index(drop=True, inplace=True)
-        print(df_train_features.head())
+            print('elapsed time \t', time.time() - start)
 
-        # construct training labels
-        # pair of rows denotes that A is closer to B (1) and that A is closer to C (0)
-        df_train_labels = pd.DataFrame(np.where(np.arange(2*len(df_train.values)) % 2, 0, 1), columns=['label'])
-        print(df_train_labels.head())
+            # TODO: add test to check whether construction is as intended
 
-        # construct test features
-        df_test_features = prepare_test_features(classes, df_test)
-        df_test_features.columns = header
-        print(df_test_features.head())
-
-        # write prepared data to csv file
-        df_train_features.to_csv(HANDOUT_PATH + 'train_features.csv', index=False)
-        df_train_labels.to_csv(HANDOUT_PATH + 'train_labels.csv', index=False)
-        df_test_features.to_csv(HANDOUT_PATH + 'test_features.csv', index=False)
-
-        print('elapsed time \t', time.time() - start)
-
-        # TODO: add test to check whether construction is as intended
-
-    else:
-        print('Loading training and test set...')
-        # load constructed data
-        df_train_features = pd.read_csv(HANDOUT_PATH + 'train_features.csv')
-        df_train_labels = pd.read_csv(HANDOUT_PATH + 'train_labels.csv')
-        df_test_features = pd.read_csv(HANDOUT_PATH + 'test_features.csv')
+        else:
+            print('Loading training and test set...')
+            # load constructed data
+            df_train_features = pd.read_csv(HANDOUT_PATH + 'train_features.csv')
+            df_train_labels = pd.read_csv(HANDOUT_PATH + 'train_labels.csv')
+            df_test_features = pd.read_csv(HANDOUT_PATH + 'test_features.csv')
 
     # ====================
     # CREATE NN CLASSIFIER
