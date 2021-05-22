@@ -8,6 +8,7 @@ May, 2021
 Version 1.2
 
 Usage: python main.py --eps 100 --bsz 64 --lr 0.002
+with eps: epochs, bsz: batchsize, lr: learning rate
 
 # TODO: adding more classses only using resnet does hardly improve it, use multiple pretrained networks and only use the most common classes (related to food)...
 """
@@ -140,7 +141,6 @@ class BinaryClassification(nn.Module):
 
 
 def load_images_resnet(model, df):
-    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
     for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
         if filename.endswith('.jpg'):
             print('\n' + filename)
@@ -161,7 +161,6 @@ def load_images_resnet(model, df):
     return df
 
 def load_images_vgg(model, df):
-    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
     for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
         if filename.endswith('.jpg'):
             print('\n' + filename)
@@ -182,7 +181,6 @@ def load_images_vgg(model, df):
     return df
 
 def load_images_xception(model, df):
-    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
     for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
         if filename.endswith('.jpg'):
             print('\n' + filename)
@@ -446,9 +444,6 @@ if __name__ == '__main__':
 
             # construct header
             header = list()
-            # header.extend(['A_class'+str(i+1) for i in range(len(df.columns))])
-            # header.extend(['B_class'+str(i+1) for i in range(len(df.columns))])
-            # header.extend(['C_class'+str(i+1) for i in range(len(df.columns))])
             for i in range(len(df_red)):
                 for j in range(len(df_red[i].columns)):
                     header.append('A_class'+str(j+1))
