@@ -10,7 +10,18 @@ Version 1.2
 Usage: python main.py --eps 100 --bsz 64 --lr 0.002
 with eps: epochs, bsz: batchsize, lr: learning rate
 
-# TODO: adding more classses only using resnet does hardly improve it, use multiple pretrained networks and only use the most common classes (related to food)...
+"""
+
+
+
+"""
+TODO:
+- accuracy check error
+- data of networks on different rows
+- order of data right?
+- data augmentation
+- extend pretrained network directly
+- check triplet loss
 """
 
 import numpy as np
@@ -57,9 +68,9 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 # DATA LOADING
 LOAD_PREPROCESSED = True
-LOAD_REDUCED_TRAINING_DATA = True
+LOAD_REDUCED_TRAINING_DATA = False
 LOAD_PREPARED_TRAINING_DATA = False
-THRESHOLD_STD = 2
+THRESHOLD_STD = 4
 
 # HYPERPARAMETERS
 LEARNING_RATE = 0.002
@@ -344,8 +355,8 @@ if __name__ == '__main__':
     # =============
     # PREPROCESSING
     # =============
-    # if not LOAD_PREPROCESSED:
-    #     print('Preprocessing images...')
+    if not LOAD_PREPROCESSED:
+        print('Preprocessing images...')
     #
     #     # setup pretrained models
     #     # model_resnet = tf.keras.Sequential()
@@ -382,13 +393,13 @@ if __name__ == '__main__':
     #
     #     print('elapsed time \t', time.time() - start)
 
-    # else:
-    #     print('Loading class probabilities...')
-    #     # load preprocessed images
-    #     df_images_resnet = pd.read_csv(HANDOUT_PATH + 'class_probabilities_resnet.csv', index_col=0)
-    #     df_images_vgg = pd.read_csv(HANDOUT_PATH + 'class_probabilities_vgg.csv', index_col=0)
-    #     df_images_xception = pd.read_csv(HANDOUT_PATH + 'class_probabilities_xception.csv', index_col=0)
-    #     df_images = [df_images_resnet, df_images_vgg, df_images_xception]
+    else:
+        print('Loading class probabilities...')
+        # load preprocessed images
+        df_images_resnet = pd.read_csv(HANDOUT_PATH + 'class_probabilities_resnet.csv', index_col=0)
+        df_images_vgg = pd.read_csv(HANDOUT_PATH + 'class_probabilities_vgg.csv', index_col=0)
+        df_images_xception = pd.read_csv(HANDOUT_PATH + 'class_probabilities_xception.csv', index_col=0)
+        df_images = [df_images_resnet, df_images_vgg, df_images_xception]
 
     # ==============
     # REDUCE CLASSES
