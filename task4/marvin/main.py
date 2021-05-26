@@ -14,8 +14,8 @@ Usage: python main.py --eps 100 --bsz 64 --lr 0.002
 
 import numpy as np
 import pandas as pd
-# import tensorflow as tf
-# import keras
+import tensorflow as tf
+import keras
 import os
 import time
 import matplotlib.pyplot as plt
@@ -24,11 +24,11 @@ import seaborn as sns
 import argparse
 
 # example of using a pre-trained model as a classifier
-# from keras.preprocessing.image import load_img
-# from keras.preprocessing.image import img_to_array
-# from keras.applications.vgg16 import preprocess_input
-# from keras.applications.resnet50 import decode_predictions
-# from keras.applications.resnet50 import ResNet50
+from keras.preprocessing.image import load_img
+from keras.preprocessing.image import img_to_array
+from keras.applications.resnet50 import preprocess_input
+from keras.applications.resnet50 import decode_predictions
+from keras.applications.resnet50 import ResNet50
 
 # pytorch
 import torch
@@ -40,28 +40,23 @@ import sklearn
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
-# better save than sorry
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
-# DATA LOADING
+####################################
 LOAD_PREPROCESSED = True
-LOAD_PREPARED_TRAINING_DATA = False
-THRESHOLD_STD = 0.1
-
-# HYPERPARAMETERS
-LEARNING_RATE = 0.0002
+LOAD_PREPARED_TRAINING_DATA = True
+N_FEATURES = 134
+####################################
+LEARNING_RATE = 0.001
 BATCHSIZE = 64
 EPOCHS = 30
-
-# PATHS
+####################################
 HANDOUT_PATH = "/home/marvin/Downloads/IML_handout_task4/"  
+####################################
 
 # set random seed
 np.random.seed(42)
 torch.manual_seed(42)
-
 
 class AverageMeter:
     """ Computes and stores the average and current value. """
@@ -114,58 +109,45 @@ class BinaryClassification(nn.Module):
 
     def __init__(self):
         super(BinaryClassification, self).__init__()
-        self.classifier1 = nn.Sequential(
+        self.classifier = nn.Sequential(
             nn.Linear(len(X_train[0]), 256),
-            nn.ReLU(),
-            nn.Dropout(p=0.1),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Dropout(p=0.1),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
-        )
-        self.classifier2 = nn.Sequential(
-            nn.Linear(len(X_train[0]), 256),
-            nn.Dropout(p=0.3),
             nn.ReLU(),
             nn.Linear(256, 64),
             nn.ReLU(),
-            nn.Dropout(p=0.3),
+            nn.Dropout(p=0.2),
             nn.Linear(64, 1),
             nn.Sigmoid()
         )
 
     def forward(self, inputs):
-        return self.classifier2(inputs)
+        return self.classifier(inputs)
 
 
-# def load_images(model, df):
-#     imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
-#     for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
-#         if filename.endswith('.jpg'):
-#             print('\n' + filename)
-#             image = get_image(filename)
-#             # reshape data for the model
-#             image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
-#             # prepare the image for the model
-#             image = preprocess_input(image)
-#             # predict the probability across all output classes
-#             yhat = model.predict(image)
-#             # retrieve the most likely result, e.g. highest probability
-#             label = decode_predictions(yhat)
-#             # retrieve the most likely result, e.g. highest probability
-#             label = label[0][0]
-#             print('%s (%.2f%%)' % (label[1], label[2] * 100))
-#             # append the probabilities to dataframe
-#             df.loc[filename[0:-4]] = yhat[0][:]
-#     return df
+def load_images(model, df):
+    imagenames = sorted(os.listdir(HANDOUT_PATH + 'food/'))
+    for filename in tqdm(sorted(os.listdir(HANDOUT_PATH + 'food/'))):
+        if filename.endswith('.jpg'):
+            image = get_image(filename)
+            # reshape data for the model
+            image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+            # prepare the image for the model
+            image = preprocess_input(image)
+            # predict the probability across all output classes
+            yhat = model.predict(image)
+            # retrieve the most likely result, e.g. highest probability
+            label = decode_predictions(yhat)
+            # retrieve the most likely result, e.g. highest probability
+            label = label[0][0]
+            # append the probabilities to dataframe
+            df.loc[filename[0:-4]] = yhat[0][:]
+    return df
 
 
-# def get_image(filename):
-#     global HANDOUT_PATH
-#     img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(224, 224))
-#     img = img_to_array(img)
-#     return img
+def get_image(filename):
+    global HANDOUT_PATH
+    img = load_img(HANDOUT_PATH + '/food/' + filename, target_size=(224, 224))
+    img = img_to_array(img)
+    return img
 
 
 def plot_heatmap(data):
@@ -189,6 +171,9 @@ def prepare_training_features(class_proba, df_features):
         triplet 1: A1 B1 C1 ...
         triplet 1: A1 C1 B1 ...
     """
+    def transpose_classes(probaA, probaB, probaC):
+        return np.concatenate(np.array([probaA, probaB, probaC]).T)
+
     # assign for each triplet its probability to each of the main classes
     features = np.ndarray(shape=(2 * len(df_features), 3 * len(class_proba[0])))
     for i, triplet in enumerate(tqdm(df_features.to_numpy())):
@@ -213,6 +198,9 @@ def prepare_test_features(class_proba, df_features):
         triplet 0: A1 B1 C1 ...
         triplet 1: A1 B1 C1 ...
     """
+    def transpose_classes(probaA, probaB, probaC):
+        return np.concatenate(np.array([probaA, probaB, probaC]).T)
+
     features = np.ndarray(shape=(len(df_features), 3 * len(class_proba[0])))
     for i, triplet in enumerate(tqdm(df_features.to_numpy())):
         # get image ids per triple
@@ -223,96 +211,48 @@ def prepare_test_features(class_proba, df_features):
     return pd.DataFrame(features)
 
 
-def transpose_classes(probaA, probaB, probaC):
-    """ Transposes an array of ordering
-        A1 A2 ... B1 B2 ... C1 C2 ...
-    to an array of ordering
-        A1 B1 C1 A2 B2 C2 ...
-    """
-    return np.concatenate(np.array([probaA, probaB, probaC]).T)
-
-
-# TODO
-def test_construction():
-    return 0
-
-
-# =======================================================================================
-# IDEA: PREDICT CLASS LABELS FOR EACH IMAGE INDEPENDENTLY.
-# THEN, WE SAVE THE 1000-DIM OUTPUT VECTOR OF EACH IMAGE AS A NEW FEATURE VECTOR.
-# WE THEN TRAIN A NEURAL NETWORK WITH 3x1000 INPUTS AND ONE SINGLE OUTPUT
-# TO PREDICT A TASTE SIMILARITY BETWEEN THE TWO INPUTS IN RANGE [0,1].
-# =======================================================================================
-
+############## MAIN ###############
 if __name__ == '__main__':
-    # ===============
-    # PARSE ARGUMENTS
-    # ===============
-    parser = argparse.ArgumentParser(description='Hyperparameters for NN')
-    parser.add_argument('--eps', type=int, default=EPOCHS, help='epochs')
-    parser.add_argument('--bsz', type=int, default=BATCHSIZE, help='batchsize')
-    parser.add_argument('--lr', type=float, default=LEARNING_RATE, help='learning rate')
-    args = parser.parse_args()
-
-    # =============
-    # PREPROCESSING
-    # =============
+    # =================
+    # preprocess images
+    # =================
     if not LOAD_PREPROCESSED:
-        print('Preprocessing images...')
-        
-        # setup model
         # we use the pretrained model
         model = tf.keras.Sequential()
         model = ResNet50(include_top=True)
         model.summary()
-        
-        # predict image classes (preprocessing)
-        start = time.time()
+
         header = []
         for i in range(1000):
             header.append('class' + str(i + 1))
         
         df_images = pd.DataFrame(columns=header)
         df_images = load_images(model, df_images)
-        
-        print('...writing class probabilities')
         df_images.to_csv(HANDOUT_PATH + 'class_probabilities.csv')
-        
-        print('elapsed time \t', time.time() - start)
-
+    
     else:
-        print('Loading class probabilities...')
-        # load preprocessed images
         df_images = pd.read_csv(HANDOUT_PATH + 'class_probabilities.csv', index_col=0)
 
-    # ================
-    # PREPARE TRIPLETS
-    # ================
+    # =========================
+    # Construct feature vectors
+    # =========================
     if not LOAD_PREPARED_TRAINING_DATA:
-        # ===============
-        # CLASS REDUCTION
-        # ===============
-        print('Reduce classes...')
+        # reduce number of classes
+        X = df_images.values
 
-        # heat map of class probabilities
+        #standardize data
+        scaler = StandardScaler()
+        X_standardized  = scaler.fit_transform(X)
+
+        # dimensionality reduction
+        pca = PCA(n_components=N_FEATURES)
+        X_reduced = pca.fit_transform(X=X_standardized)
+
+        # construct new dataframe
+        header = ['feature_'+str(i+1) for i in range(N_FEATURES)]
+        df_reduced = pd.DataFrame(index=df_images.index,columns=header,data=X_reduced)
         plot_heatmap(df_images)
-
-        # only use classes which are more present than a certain threshold in images
-        class_mean = df_images.mean(axis=0)
-        threshold = class_mean.mean() + THRESHOLD_STD * class_mean.std()  # TODO: tune this
-        reduced_classes = [idx for idx, c in enumerate(class_mean) if c > threshold]
-        print(len(reduced_classes))
-
-        # prepare data frame with reduced classes
-        df_reduced = df_images.iloc[:, reduced_classes]
-        df_reduced.columns = ['class' + str(i + 1) for i in range(len(reduced_classes))]
         df_reduced.to_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv')
-        df_reduced = pd.read_csv(HANDOUT_PATH + 'reduced_class_probabilities.csv', index_col=0)
-        classes = df_reduced.values
-        plot_heatmap(df_reduced)
-
-        print('Prepare training data...')
-        start = time.time()
 
         # load the triplets
         df_train = pd.read_csv(HANDOUT_PATH + '/train_triplets.txt', header=None)
@@ -324,15 +264,14 @@ if __name__ == '__main__':
             header.append('A_class'+str(i+1))
             header.append('B_class'+str(i+1))
             header.append('C_class'+str(i+1))
+        
+        classes = df_reduced.values
 
         # construct training features
         df_train_features = prepare_training_features(classes, df_train)
         df_train_features.columns = header
-        print(df_train_features.head())
-
-        # construct training labels
-        # pair of rows denotes that A is closer to B (1) and that A is closer to C (0)
         df_train_labels = pd.DataFrame(np.where(np.arange(2*len(df_train.values)) % 2, 0, 1), columns=['label'])
+        print(df_train_features.head())
 
         # construct test features
         df_test_features = prepare_test_features(classes, df_test)
@@ -344,27 +283,18 @@ if __name__ == '__main__':
         df_train_labels.to_csv(HANDOUT_PATH + 'train_labels.csv', index=False)
         df_test_features.to_csv(HANDOUT_PATH + 'test_features.csv', index=False)
 
-        print('elapsed time \t', time.time() - start)
-
+    
     else:
-        print('Loading training and test set...')
-        # load constructed data
+        df_train_features = pd.read_csv(HANDOUT_PATH + 'train_features.csv')
+        df_train_labels = pd.read_csv(HANDOUT_PATH + 'train_labels.csv')
+        df_test_features = pd.read_csv(HANDOUT_PATH + 'test_features.csv')
 
-
-    # ====================
-    # CREATE NN CLASSIFIER
-    # ====================
-    # extract training and test data
+    # ==========
+    # split data
+    # ==========
     y_train = df_train_labels.values
     X_train = df_train_features.values
     X_test = df_test_features.values
-
-    # ================
-    # standardize data
-    # ================
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
 
     X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.1, shuffle=True, random_state=42)
 
@@ -373,7 +303,7 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
     # =================
     # run training loop
@@ -381,17 +311,16 @@ if __name__ == '__main__':
     model.train()
     train_results = {}
     test_results = {}
-    print('Running training loop...')
 
     # iterate over all epochs
-    for epoch in tqdm(range(1, args.eps + 1)):
+    for epoch in tqdm(range(1, EPOCHS + 1)):
         time_ = AverageMeter()
         loss_ = AverageMeter()
         acc_ = AverageMeter()
 
         # define data loader
         train_data = TrainData(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
-        train_loader = DataLoader(dataset=train_data, batch_size=args.bsz, shuffle=False)
+        train_loader = DataLoader(dataset=train_data, batch_size=BATCHSIZE, shuffle=False)
         validation_data = TrainData(torch.FloatTensor(X_validation), torch.FloatTensor(y_validation))
         validation_loader = DataLoader(dataset=validation_data, batch_size=100, shuffle=True)
 
@@ -447,7 +376,6 @@ if __name__ == '__main__':
         # nice print to console
         time.sleep(0.1)
     
-
     # plot training process
     training = list()
     for key, values in train_results.items():
@@ -470,7 +398,7 @@ if __name__ == '__main__':
     # ===================
     print('Classify test images...')
     test_data = TestData(torch.FloatTensor(X_test))
-    test_loader = DataLoader(dataset=test_data, batch_size=args.bsz, shuffle=False)
+    test_loader = DataLoader(dataset=test_data, batch_size=BATCHSIZE, shuffle=False)
     y_pred_list = []
     model.eval()
     for data in tqdm(test_loader):
@@ -487,4 +415,5 @@ if __name__ == '__main__':
     y_pred_list = np.concatenate(y_pred_list).ravel().tolist()
     np.savetxt("predictions.csv", y_pred_list, fmt="%i")
     print('=== Finished prediction ===')
-    print('Epochs: {}, Batch size: {}, Learning rate {}'.format(args.eps, args.bsz, args.lr))
+    print('Epochs: {}, Batch size: {}, Learning rate {}'.format(EPOCHS, BATCHSIZE, LEARNING_RATE))
+
