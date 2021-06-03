@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import time
 from tqdm import tqdm
-from PIL import Image
+
 
 # pytorch
 import numpy as np
@@ -70,7 +70,7 @@ class SiameseDataset(tf.keras.utils.Sequence):
         imgB = preprocess_input(imgB)
         imgC = preprocess_input(imgC)
 
-        return tf.stack([imgA, imgB, imgC], axis=0)
+        return tf.stack([imgA, imgB, imgC], axis=0), np.array(0)
         
     def __len__(self):
         #return len(self.train_df)
@@ -99,6 +99,8 @@ class SiameseNetwork():
             BatchNormalization(),
             Dense(EMBEDDING_DIM),
             Lambda(lambda x: tf.math.l2_normalize(x, axis=1))])
+        
+        classifier.trainable = True
 
         anchor_feature = classifier(conv_net(basis_inputs[:, 0, ...]))
         positive_feature = classifier(conv_net(basis_inputs[:, 1, ...]))

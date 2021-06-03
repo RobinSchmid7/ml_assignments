@@ -15,8 +15,8 @@ from sklearn.model_selection import train_test_split
 
 USE_TRAINED = False
 
-WIDTH = 224
-HEIGHT = 224
+WIDTH = 150
+HEIGHT = 150
 CHANNELS = 3
 
 EPOCHS = 10
@@ -29,8 +29,8 @@ LOSS_MARGIN = 0.0
 VALIDATION_SIZE = 0.2
 VALIDATION_STEPS = 10
 
-TRAIN_BATCH_SIZE = 128
-TEST_BATCH_SIZE = 256
+TRAIN_BATCH_SIZE = 64
+TEST_BATCH_SIZE = 128
 BUFFER_SIZE = 2056
 
 HANDOUT_PATH = "/home/marvin/Downloads/IML_handout_task4/" 
@@ -72,10 +72,33 @@ def create_prediction_model(model):
     predictions = tf.cast(tf.greater_equal(dist_negative, dist_positive), tf.int8)
     return Model(inputs=model.inputs, outputs=predictions)
 
-def triplet_loss(_,embeddings):
-    dist_positive = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 1]), axis=1)
-    dist_negative = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 2]), axis=1)
-    return tf.reduce_mean(tf.math.softplus(dist_positive - dist_negative + LOSS_MARGIN))
+class TripletLoss():
+    """
+    Contrastive loss function.
+    Based on:
+    """
+
+    def __init__(self, margin=0.1):
+        super(TripletLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self,_,inputs):
+        x0 = inputs[..., 0]
+        x1 = inputs[..., 1]
+        x2 = inputs[..., 2]
+        # euclidian distance A-B
+        diff1 = x0 - x1
+        dist1 = tf.norm(diff1)
+
+        # euclidian distance A-C
+        diff2 = x0 - x2
+        dist2 = tf.norm(diff2)
+
+        # get the triplet loss
+        mdist = self.margin + dist1 - dist2
+        dist = tf.math.log(tf.math.add(tf.math.exp(mdist),1))
+        loss = tf.reduce_mean(dist)
+        return loss
 
 def accuracy(_,embeddings):
     dist_positive = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 1]), axis=1)
@@ -131,14 +154,16 @@ negative_feature = classifier(conv_net(basis_inputs[:, 2, ...]))
 embeddings = tf.stack([anchor_feature, positive_feature, negative_feature], axis=-1)
 
 # Siamese model
+Loss = TripletLoss()
 model = Model(inputs=basis_inputs, outputs=embeddings)
-model.compile(optimizer=optimizers.Adam(learning_rate=LEARNING_RATE), loss=[triplet_loss], metrics=[accuracy])
+model.compile(optimizer=optimizers.Adam(learning_rate=LEARNING_RATE), loss=[Loss.forward], metrics=[accuracy])
 
 # ==================
 # define dataloaders
 # ==================
 train_data = train_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True).repeat().batch(TRAIN_BATCH_SIZE)
 val_data = val_data.batch(TRAIN_BATCH_SIZE)
+
 
 # ===========
 # Train model
