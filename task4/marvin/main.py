@@ -44,12 +44,12 @@ from sklearn.decomposition import PCA
 
 ####################################
 LOAD_PREPROCESSED = True
-LOAD_PREPARED_TRAINING_DATA = True
-N_FEATURES = 134
+LOAD_PREPARED_TRAINING_DATA = False
+N_FEATURES = 250
 ####################################
 LEARNING_RATE = 0.001
 BATCHSIZE = 64
-EPOCHS = 30
+EPOCHS = 50
 ####################################
 HANDOUT_PATH = "/home/marvin/Downloads/IML_handout_task4/"  
 ####################################
@@ -296,7 +296,8 @@ if __name__ == '__main__':
     X_train = df_train_features.values
     X_test = df_test_features.values
 
-    X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.1, shuffle=True, random_state=42)
+    X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=0.3)
+
 
     # define model, loss and optimizer
     model = BinaryClassification()
@@ -320,9 +321,9 @@ if __name__ == '__main__':
 
         # define data loader
         train_data = TrainData(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
-        train_loader = DataLoader(dataset=train_data, batch_size=BATCHSIZE, shuffle=False)
+        train_loader = DataLoader(dataset=train_data, batch_size=BATCHSIZE, shuffle=True)
         validation_data = TrainData(torch.FloatTensor(X_validation), torch.FloatTensor(y_validation))
-        validation_loader = DataLoader(dataset=validation_data, batch_size=100, shuffle=True)
+        validation_loader = DataLoader(dataset=validation_data, batch_size=BATCHSIZE, shuffle=True)
 
         # iterate over training mini-batches
         for i, data, in enumerate(train_loader, 1):
@@ -349,26 +350,25 @@ if __name__ == '__main__':
             optimizer.step()
 
             # validate accuracy
-            acc = []
-            model.eval()
-            with torch.no_grad():
-                for j, data_validation, in enumerate(validation_loader, 1):
-                    if j>3:
-                        break
-                    features_validation, labels_validation = data_validation
-                    features_validation = features_validation.to(device)
-                    labels_validation = labels_validation.to(device)
-                    prediction_validation = model(features_validation)
-                    acc.append(accuracy_score(labels_validation,torch.round(prediction_validation).detach().numpy()))
-
-            model.train()
-
+            acc = accuracy_score(labels,torch.round(prediction).detach().numpy())
 
             # accounting
-            acc = np.mean(acc)
             loss_.update(loss.mean().item(), bs)
             acc_.update(acc.item(), bs)
             time_.update(time.time() - end)
+        
+        model.eval()
+        acc_validation = []
+        with torch.no_grad():
+            for j, data_validation, in enumerate(validation_loader, 1):
+                features_validation, labels_validation = data_validation
+                features_validation = features_validation.to(device)
+                labels_validation = labels_validation.to(device)
+                prediction_validation = model(features_validation)
+                acc_validation.append(accuracy_score(labels_validation,torch.round(prediction_validation).detach().numpy()))
+
+        model.train()
+        print('acc = ' + str(np.mean(acc_validation)))
 
         print(f'\n Epoch {epoch}. [Train] \t Time {time_.sum:.2f} \t Loss {loss_.avg:.2f} \t Accuracy {acc_.avg:.2f}')
         train_results[epoch] = (loss_.avg, acc_.avg, time_.avg)
@@ -413,7 +413,7 @@ if __name__ == '__main__':
     # =======================
     y_pred_list = [batch.squeeze().tolist() for batch in y_pred_list]
     y_pred_list = np.concatenate(y_pred_list).ravel().tolist()
-    np.savetxt("predictions.csv", y_pred_list, fmt="%i")
+    np.savetxt(HANDOUT_PATH + "predictions.csv", y_pred_list, fmt="%i")
     print('=== Finished prediction ===')
     print('Epochs: {}, Batch size: {}, Learning rate {}'.format(EPOCHS, BATCHSIZE, LEARNING_RATE))
 
