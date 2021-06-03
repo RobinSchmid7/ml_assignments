@@ -8,42 +8,36 @@ May, 2021
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Lambda
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dropout, BatchNormalization, Dense, Lambda
 from tensorflow.keras import optimizers, Sequential, Input, Model
-from tensorflow.keras.applications import Xception, ResNet50, MobileNetV2
+from tensorflow.keras.applications import MobileNetV2
 from sklearn.model_selection import train_test_split
 
 USE_TRAINED = False
 
-WIDTH = 128
-HEIGHT = 128
+WIDTH = 224
+HEIGHT = 224
 CHANNELS = 3
+
+EPOCHS = 10
+LEARNING_RATE = 0.0001
+
+NUM_EMBEDDINGS = 256
+DROPOUT_RATE = 0.5
+LOSS_MARGIN = 0.0
 
 VALIDATION_SIZE = 0.2
 VALIDATION_STEPS = 10
-NUM_EMBEDDINGS = 128
-LEARNING_RATE = 0.0001
-EPOCHS = 4
 
-TRAIN_BATCH_SIZE = 64
+TRAIN_BATCH_SIZE = 128
 TEST_BATCH_SIZE = 256
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 2056
 
 HANDOUT_PATH = "/home/marvin/Downloads/IML_handout_task4/" 
 
-# Preprocessing, split training triplets into training and validation set
-def create_split_data():
-    with open(HANDOUT_PATH + 'train_triplets.txt', 'r') as file:
-        triplets = [l for l in file.readlines()]
+# Seed for reproducability
+seed = 42
 
-    train_data, val_data = train_test_split(triplets, test_size=VALIDATION_SIZE, random_state=42)
-
-    with open(HANDOUT_PATH + 'train_data.txt', 'w') as file:
-        for e in train_data:
-            file.write(e)
-    with open(HANDOUT_PATH + 'val_data.txt', 'w') as file:
-        for e in val_data:
-            file.write(e)
 
 def load_dataset(filename, augmenting):
     data = tf.data.TextLineDataset(filename)
@@ -62,36 +56,15 @@ def process_image(filename, augmenting):
     img = tf.io.read_file(filename)
     img = tf.image.decode_jpeg(img, channels=CHANNELS)
     # Resize and scale images
-    img = tf.cast(img, tf.float32) / 127.5 - 1
+    img = (tf.cast(img, tf.float32) - 127.5) / 127.5
     img = tf.image.resize(img, (HEIGHT, WIDTH))
+
     # Randomly flip images for augmentation
     if augmenting:
         img = tf.image.random_flip_left_right(img)
         img = tf.image.random_flip_up_down(img)
     return img
 
-def create_model(num_embeddings):
-    # Pretrained model
-    basis_inputs = Input(shape=(3, HEIGHT, WIDTH, CHANNELS))
-    basis_model = MobileNetV2(include_top=False, input_shape=(HEIGHT, WIDTH, CHANNELS))
-    # Do not train pretrained model
-    basis_model.trainable = False
-
-    # Additional layers for prediction
-    extended_model = Sequential([
-        GlobalAveragePooling2D(),
-        Dense(num_embeddings),
-        Lambda(lambda x: tf.math.l2_normalize(x, axis=1))])
-
-    # Create embeddings
-    anchor_embedding = extended_model(basis_model(basis_inputs[:, 0, ...]))
-    positive_embedding = extended_model(basis_model(basis_inputs[:, 1, ...]))
-    negative_embedding = extended_model(basis_model(basis_inputs[:, 2, ...]))
-    embeddings = tf.stack([anchor_embedding, positive_embedding, negative_embedding], axis=-1)
-
-    # Siamese model
-    siamese_model = Model(inputs=basis_inputs, outputs=embeddings)
-    return siamese_model
 
 def create_prediction_model(model):
     dist_positive = tf.reduce_sum(tf.square(model.output[..., 0] - model.output[..., 1]), axis=1)
@@ -102,55 +75,83 @@ def create_prediction_model(model):
 def triplet_loss(_,embeddings):
     dist_positive = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 1]), axis=1)
     dist_negative = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 2]), axis=1)
-    return tf.reduce_mean(tf.math.softplus(dist_positive - dist_negative))
+    return tf.reduce_mean(tf.math.softplus(dist_positive - dist_negative + LOSS_MARGIN))
 
 def accuracy(_,embeddings):
     dist_positive = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 1]), axis=1)
     dist_negative = tf.reduce_sum(tf.square(embeddings[..., 0] - embeddings[..., 2]), axis=1)
     return tf.reduce_mean(tf.cast(tf.greater_equal(dist_negative, dist_positive), tf.float32))
 
-if __name__ == '__main__':
-    # Load data
-    create_split_data()
-    train_data = load_dataset(HANDOUT_PATH + 'train_data.txt', augmenting=True)
-    val_data = load_dataset(HANDOUT_PATH + 'val_data.txt', augmenting=False)
+# =========
+# Load data
+# =========
+with open(HANDOUT_PATH + 'train_triplets.txt', 'r') as file:
+    triplets = [l for l in file.readlines()]
 
-    # Number of training and test data
-    with open(HANDOUT_PATH + 'train_data.txt', 'r') as file:
-        num_train_data = sum(1 for line in file)
-    with open(HANDOUT_PATH + 'test_triplets.txt', 'r') as file:
-        num_test_data = sum(1 for line in file)
+train_data, val_data = train_test_split(triplets, test_size=VALIDATION_SIZE, random_state=seed)
+with open(HANDOUT_PATH + 'train_data.txt', 'w') as file:
+    for e in train_data:
+        file.write(e)
+with open(HANDOUT_PATH + 'val_data.txt', 'w') as file:
+    for e in val_data:
+        file.write(e)
 
-    # Create and compile model
-    if not USE_TRAINED:
-        model = create_model(NUM_EMBEDDINGS)
-    else:
-        with open(HANDOUT_PATH + 'model.json', 'r') as json_file:
-            loaded_model_json = json_file.read()
-        model = tf.keras.models.model_from_json(loaded_model_json)
-        model.load_weights(HANDOUT_PATH + 'model.h5')
+train_data = load_dataset(HANDOUT_PATH + 'train_data.txt', augmenting=True)
+val_data = load_dataset(HANDOUT_PATH + 'val_data.txt', augmenting=False)
 
-    model.compile(optimizer=optimizers.Adam(learning_rate=LEARNING_RATE), loss=triplet_loss, metrics=[accuracy])
+# Number of training and test data
+with open(HANDOUT_PATH + 'train_data.txt', 'r') as file:
+    num_train_data = sum(1 for line in file)
+with open(HANDOUT_PATH + 'test_triplets.txt', 'r') as file:
+    num_test_data = sum(1 for line in file)
 
-    # Load batches
-    train_data = train_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True).repeat().batch(TRAIN_BATCH_SIZE)
-    val_data = val_data.batch(TRAIN_BATCH_SIZE)
+# ==============
+# Define a model
+# ==============
+basis_inputs = Input(shape=(3, HEIGHT, WIDTH, CHANNELS))
+conv_net = MobileNetV2(include_top=False, input_shape=(HEIGHT, WIDTH, CHANNELS))
+# Do not train pretrained model
+conv_net.trainable = False
 
-    # Train model
-    model.fit(train_data, steps_per_epoch=int(np.ceil(num_train_data / TRAIN_BATCH_SIZE)),
-              epochs=EPOCHS,validation_data=val_data,validation_steps=VALIDATION_STEPS)
+# Additional layers for prediction
+classifier = Sequential([
+    GlobalAveragePooling2D(),
+    Dropout(DROPOUT_RATE),
+    BatchNormalization(),
+    Dense(NUM_EMBEDDINGS),
+    Dropout(DROPOUT_RATE),
+    BatchNormalization(),
+    Dense(NUM_EMBEDDINGS),
+    Lambda(lambda x: tf.math.l2_normalize(x, axis=1))])
 
-    # Predict labels
-    test_data = load_dataset(HANDOUT_PATH + 'test_triplets.txt', augmenting=False)
-    test_data = test_data.batch(TEST_BATCH_SIZE).prefetch(2)
-    prediction_model = create_prediction_model(model)
-    predictions = prediction_model.predict(test_data,steps=int(np.ceil(num_test_data / TEST_BATCH_SIZE)))
+# Create feature vectors (embeddings)
+anchor_feature = classifier(conv_net(basis_inputs[:, 0, ...]))
+positive_feature = classifier(conv_net(basis_inputs[:, 1, ...]))
+negative_feature = classifier(conv_net(basis_inputs[:, 2, ...]))
+embeddings = tf.stack([anchor_feature, positive_feature, negative_feature], axis=-1)
 
-    # Save model and weights to disk
-    model_json = model.to_json()
-    with open(HANDOUT_PATH + 'model.json', 'w') as json_file:
-        json_file.write(model_json)
-    model.save_weights(HANDOUT_PATH + 'model.h5')
+# Siamese model
+model = Model(inputs=basis_inputs, outputs=embeddings)
+model.compile(optimizer=optimizers.Adam(learning_rate=LEARNING_RATE), loss=[triplet_loss], metrics=[accuracy])
 
-    np.savetxt('predictions4.txt', predictions, fmt='%i')
-    print("Finished!")
+# ==================
+# define dataloaders
+# ==================
+train_data = train_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True).repeat().batch(TRAIN_BATCH_SIZE)
+val_data = val_data.batch(TRAIN_BATCH_SIZE)
+
+# ===========
+# Train model
+# ===========
+model.fit(train_data, steps_per_epoch=int(np.ceil(num_train_data / TRAIN_BATCH_SIZE)),
+          epochs=EPOCHS,validation_data=val_data,validation_steps=VALIDATION_STEPS)
+
+# Predict labels
+test_data = load_dataset(HANDOUT_PATH + 'test_triplets.txt', augmenting=False)
+test_data = test_data.batch(TEST_BATCH_SIZE).prefetch(2)
+prediction_model = create_prediction_model(model)
+predictions = prediction_model.predict(test_data,steps=int(np.ceil(num_test_data / TEST_BATCH_SIZE)))
+
+# save prediction to file
+np.savetxt('predictions.txt', predictions, fmt='%i')
+print("Finished!")
